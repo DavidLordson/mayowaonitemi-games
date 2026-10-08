@@ -217,6 +217,8 @@ dialog .form { padding: 22px; min-width: 280px; text-align: center; }
 .ludo-3d { display: none; width: var(--size); height: var(--size); touch-action: manipulation; }
 .ludo-3d canvas { display: block; }
 .ludo.is-3d .ludo-3d { display: block; }
+.ludo.loading .ludo-3d { display: grid; place-items: center; background: var(--surface); border-radius: 14px; color: var(--muted); }
+.ludo.loading .ludo-3d::after { content: "Loading board\2026"; }
 .ludo.is-3d .ludo-board, .ludo.is-3d .dice-pair { display: none; }
 .ludo-roll { --c: var(--primary); height: 64px; border-radius: 14px; border: 0; background: var(--c); color: #fff; font-size: 22px; font-weight: 800; cursor: pointer; }
 .ludo-roll[hidden] { display: none; }

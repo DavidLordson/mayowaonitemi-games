@@ -150,6 +150,11 @@ function fitCamera(st, container, bounds, look, elevationDeg) {
   place(hi);
 }
 
+// Starts downloading the model early (the lobby calls this), so the board is ready sooner.
+export function preloadBoard3D() {
+  loadModel().catch(() => {});
+}
+
 export async function createBoard3D(boardEl, { onToken, onDie }) {
   const gltf = await loadModel();
   if (!boardEl.isConnected) return null; // the view was closed while loading

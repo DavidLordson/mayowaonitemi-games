@@ -177,6 +177,7 @@ let lobbyState = null; // latest room state seen while in the lobby
 let lobbySeenGame = null; // the game that was on when we opened the lobby
 
 function showLobby() {
+  import("./ludo3d.js").then((m) => m.preloadBoard3D()).catch(() => {}); // get the 3D Ludo files coming
   inLobby = true;
   lobbySeenGame = null;
   if (boardGame) showCrossword(); // unmount the board view

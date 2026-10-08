@@ -54,7 +54,7 @@ const place = (el, r, c, rs = 1, cs = rs) => {
 
 export function mount(root, ctx) {
   root.innerHTML = `
-    <div class="ludo">
+    <div class="ludo is-3d loading">
       <div class="ludo-3d"></div>
       <div class="ludo-board"></div>
       <div class="ludo-side">
@@ -154,12 +154,16 @@ export function mount(root, ctx) {
     .then((view) => {
       if (!view) return;
       view3d = view;
-      root.querySelector(".ludo").classList.add("is-3d");
+      root.querySelector(".ludo").classList.remove("loading");
       tokenLayer.forEach((t) => t.remove());
       tokenLayer.length = 0;
       if (game) update(game);
     })
-    .catch((err) => console.warn("3D board unavailable, using the flat board", err));
+    .catch((err) => {
+      // No 3D on this phone (or the files didn't load): use the flat board instead.
+      console.warn("3D board unavailable, using the flat board", err);
+      root.querySelector(".ludo").classList.remove("is-3d", "loading");
+    });
   root.querySelector(".game-over button").onclick = () => ctx.newGame();
 
   function send(move) {
