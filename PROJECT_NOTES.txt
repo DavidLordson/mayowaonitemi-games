@@ -1,45 +1,52 @@
 PROJECT NOTES (short) — read this only; open docs/DETAILS.txt just when a task needs it.
 
 WHAT: "Games Together" — private site where David (aka Onitemi) and Mayowa play
-Crossword, Ludo, Whot live on separate phones. User wants short, curt replies.
+Crossword, Ludo, Whot live on separate phones. David is a visual designer, not a dev:
+short, curt replies; give click-by-click steps for dashboards.
 
-WHERE
+WHERE / DEPLOY
 - Repo DavidLordson/mayowaonitemi-games. Default branch claude/optimistic-allen-tmbuoj =
-  production: Cloudflare (Workers & Pages Git import) deploys every push to it.
-- Live on the Worker's ….workers.dev address (project "mayowaonitemi-games").
-- Netlify is retired (site deleted by the user; Netlify code removed).
-- Cloud sessions can't reach api.cloudflare.com; the user checks deploys in the dashboard.
-
-CLOUDFLARE
-- wrangler.jsonc + worker/index.mjs: a Worker serves public/ and /api/room; one Durable
-  Object per room holds its data. API: create/join/invite/edit/new/play/…, plus a live
-  WebSocket (/api/room/ws) that pushes state on every change, and the computer's Ludo
-  turns run on Durable Object alarms. Cloudflare builds from the repo's default branch
-  (Workers & Pages Git import).
-- Test locally: npx wrangler@4 dev (then http://localhost:8787).
+  production: Cloudflare Workers Git import deploys every push (free). Work on the
+  session branch, fast-forward the default branch to go live.
+- Live: Worker "mayowaonitemi-games" on its ….workers.dev address. Netlify is gone.
+- Sessions can't reach api.cloudflare.com or the live site: David checks the dashboard.
+- Test locally: npx wrangler@4 dev (localhost:8787); headless Chromium + Playwright for UI.
 
 HOW IT WORKS
-- Static front end in public/ + worker/index.mjs (/api/room). Phones get pushed state
-  over a WebSocket; they poll every 15 s as a backup (every 1 s if the socket is down).
-- Rooms are private: device token in localStorage, invite links (7 days), device-login
-  links (30 min, same player). Opening a room shows a lobby (Continue / pick a game).
-- Game rules run on the server: public/games/ludo.mjs (also loaded by the browser for
-  instant moves; lib/games/ludo.mjs re-exports it), lib/games/whot.mjs.
-  Crossword generator: lib/generator.mjs + lib/words.mjs (~426 words).
-- Ludo is 3D: public/ludo3d.js draws public/models/ludo_set.glb (made in Blender) with
-  three.js r169 vendored in public/vendor/three (import map in index.html). Falls back
-  to the flat CSS board if 3D fails.
-- Ludo vs computer: lobby card -> new game with players [you, "cpu"]. The bot
-  (botMove in lib/games/ludo.mjs) plays on the server, one action per request, 600 ms
-  apart on Durable Object alarms (worker/index.mjs).
+- public/ = front end. worker/index.mjs = /api/room, one Durable Object per room
+  (create/join/invite/edit/new/play/profile/logout). /api/room/ws pushes each member's
+  view on every change; phones poll every 15 s as backup (1 s if socket down).
+- Rooms private: device token in localStorage ("cw-rooms"), invite links 7 days,
+  device-login links 30 min. Opening a room shows a lobby.
+- Rules: public/games/ludo.mjs (browser runs it too for instant moves; lib/games/ludo.mjs
+  re-exports), lib/games/whot.mjs, crossword lib/generator.mjs + lib/words.mjs.
+- Ludo 3D: public/ludo3d.js + public/models/ludo_set.glb (David's Blender model),
+  three.js r169 vendored in public/vendor/three. Top-down camera, darker board, dice
+  thrown onto the centre, tokens 1.45x. Shows "Loading board…"; flat CSS board only if
+  3D fails. Lobby preloads 3D.
+- Ludo UI: tap a piece (black ring) → tap a number [die | sum | die] → it moves, ring
+  clears. Roll button on your roll.
+- Ludo vs computer: lobby card; bot (botMove) runs on Durable Object alarms, 600 ms apart.
+- Dark mode: follows device; ◐ in top bar cycles device/dark/light.
+- Tests: npm run validate (puzzles, generator, Ludo/Whot rules, bot).
 
 HOUSE RULES
-- Ludo: two dice, each die used once on any token; 6 brings a token out; only double 6
-  = roll again. Capture: victim back to yard, capturing token goes straight home.
-  Sum button = both dice as one jump (only the landing square counts). 2 players: first member red+yellow, second
-  green+blue, all 8 home to win.
+- Ludo: two dice, each die used once; 6 brings a token out; ONLY double 6 = roll again.
+  Capture: victim → yard, capturing token → straight home, no bonus roll.
+  Sum = both dice as one jump (only landing square counts). Token home = no bonus.
+  2 players: first member red+yellow, second green+blue, all 8 home to win.
 - Whot: 1 hold on, 2 pick two (blockable with a 2, stacks), 5 pick three (not
   blockable), 8 suspension, 14 general market, 20 whot (call shape).
 - Crossword: book Puzzle 1 + random puzzles.
 
-TODO / IDEAS: more words or themes, more book puzzles, maybe blockable pick three.
+NEXT (agreed, not started)
+- Capture effect, code-only first: random big text ("CHOP AM JOORRR!", "Get rekt",
+  "Oya go house!"), board shake, confetti in victim's colour, victim flies to yard;
+  victim's phone gets its own line. David may later supply Lottie .json (512×512,
+  transparent, 1–2 s, <150 KB, text as shapes) or Rive.
+- Sounds: dice rattle/land, step ticks, capture thud + voice line, chopped groan,
+  home chime, your-turn ping, win fanfare. Placeholders from Kenney.nl (CC0); David may
+  record voice lines. MP3 mono <50 KB. Mute toggle, unlock on first tap, vibrate on
+  Android capture.
+- Ideas: more words/themes, more book puzzles, maybe blockable pick three.
+- Optional for David: Cloudflare build command `npm run validate`.
