@@ -1,4 +1,15 @@
 :root {
+  color-scheme: light;
+  --chrome: #1f2433; /* top bar */
+  --primary: #1f2433;
+  --on-primary: #ffffff;
+  --border: #dddddd;
+  --divider: #eeeeee;
+  --input: #ffffff;
+  --key: #e6e3dc;
+  --key-down: #cfcbc2;
+  --notice: #fff4d6;
+  --notice-border: #f0d58a;
   --bg: #f6f4ef;
   --surface: #ffffff;
   --ink: #1f2433;
@@ -9,6 +20,51 @@
   --sel: #ffd84d;
   --wrong: #e5484d;
   --cell: min(calc((100vw - 16px) / 13), 40px);
+}
+/* Dark theme: follows the device unless the ◐ button picked one (html[data-theme]). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --chrome: #0d0f14;
+    --primary: #e6e8ee;
+    --on-primary: #14171f;
+    --border: #3a3f4c;
+    --divider: #2c303a;
+    --input: #14171f;
+    --key: #3a3f4c;
+    --key-down: #4d5363;
+    --notice: #3b3216;
+    --notice-border: #6b5a22;
+    --bg: #14161c;
+    --surface: #1f232d;
+    --ink: #e8eaf0;
+    --muted: #9aa1b0;
+    --line: #0b0d12;
+    --block: #0b0d12;
+    --word: #2b3a57;
+    --sel: #8a6d12;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --chrome: #0d0f14;
+  --primary: #e6e8ee;
+  --on-primary: #14171f;
+  --border: #3a3f4c;
+  --divider: #2c303a;
+  --input: #14171f;
+  --key: #3a3f4c;
+  --key-down: #4d5363;
+  --notice: #3b3216;
+  --notice-border: #6b5a22;
+  --bg: #14161c;
+  --surface: #1f232d;
+  --ink: #e8eaf0;
+  --muted: #9aa1b0;
+  --line: #0b0d12;
+  --block: #0b0d12;
+  --word: #2b3a57;
+  --sel: #8a6d12;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
@@ -24,7 +80,7 @@ button { font: inherit; color: inherit; }
 .topbar {
   display: flex; align-items: center; gap: 10px;
   padding: 8px 12px; padding-top: max(8px, env(safe-area-inset-top));
-  background: var(--ink); color: #fff;
+  background: var(--chrome); color: #fff;
 }
 .topbar h1 { font-size: 17px; margin: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .players { display: flex; gap: 6px; }
@@ -41,7 +97,7 @@ button { font: inherit; color: inherit; }
 }
 .menu[hidden] { display: none; }
 .menu button { background: none; border: 0; padding: 12px 18px; text-align: left; cursor: pointer; }
-.menu button + button { border-top: 1px solid #eee; }
+.menu button + button { border-top: 1px solid var(--divider); }
 
 .layout { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; padding: 8px 8px 230px; }
 .board { display: flex; flex-direction: column; align-items: center; }
@@ -101,10 +157,10 @@ button { font: inherit; color: inherit; }
 .krow { display: flex; justify-content: center; gap: 4px; }
 .key {
   flex: 0 1 34px; height: 44px; border: 0; border-radius: 6px;
-  background: #e6e3dc; font-size: 17px; font-weight: 600; cursor: pointer; touch-action: manipulation;
+  background: var(--key); color: var(--ink); font-size: 17px; font-weight: 600; cursor: pointer; touch-action: manipulation;
 }
 .key.wide { flex-basis: 56px; font-size: 15px; }
-.key:active { background: #cfcbc2; }
+.key:active { background: var(--key-down); }
 @media (hover: hover) and (pointer: fine) and (min-width: 900px) {
   .keyboard { display: none; }
   .layout { padding-bottom: 80px; }
@@ -114,11 +170,11 @@ button { font: inherit; color: inherit; }
 .banner[hidden] { display: none; }
 .banner-card, .name-form { background: var(--surface); padding: 22px; border-radius: 14px; text-align: center; display: flex; flex-direction: column; gap: 10px; min-width: 260px; }
 .banner-title { font-size: 22px; font-weight: 700; margin: 0; }
-.banner-card button, .name-form button { padding: 10px 14px; border-radius: 8px; border: 1px solid #ddd; background: none; cursor: pointer; }
-button.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+.banner-card button, .name-form button { padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: none; cursor: pointer; }
+button.primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 dialog { border: 0; padding: 0; border-radius: 14px; }
 dialog::backdrop { background: rgba(0,0,0,.4); }
-.name-form input { font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 8px; }
+.name-form input { font-size: 16px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--ink); background: var(--input); }
 .colors { display: flex; gap: 10px; justify-content: center; }
 .swatch { width: 32px; height: 32px; border-radius: 50%; border: 3px solid transparent; background: var(--c); cursor: pointer; }
 .swatch.on { border-color: var(--ink); }
@@ -130,22 +186,22 @@ dialog::backdrop { background: rgba(0,0,0,.4); }
 .card h2 { font-size: 18px; margin: 0 0 10px; }
 .form { display: flex; flex-direction: column; gap: 12px; }
 .form label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
-.form input { font-size: 16px; padding: 10px; border: 1px solid #ccc; border-radius: 8px; color: var(--ink); background: #fff; }
-.form > button { padding: 11px 14px; border-radius: 8px; border: 1px solid #ddd; background: none; cursor: pointer; font-size: 16px; }
+.form input { font-size: 16px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--ink); background: var(--input); }
+.form > button { padding: 11px 14px; border-radius: 8px; border: 1px solid var(--border); background: none; cursor: pointer; font-size: 16px; }
 .muted { color: var(--muted); font-size: 14px; margin: 0; }
-.notice { background: #fff4d6; border: 1px solid #f0d58a; padding: 12px; border-radius: 10px; margin: 0; }
+.notice { background: var(--notice); border: 1px solid var(--notice-border); padding: 12px; border-radius: 10px; margin: 0; }
 .room-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .room-list a { display: flex; justify-content: space-between; padding: 12px; border-radius: 10px; background: var(--bg); color: var(--ink); text-decoration: none; font-weight: 600; }
 .room-list a span { font-weight: 400; color: var(--muted); }
 dialog .form { padding: 22px; min-width: 280px; text-align: center; }
-.form > button.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+.form > button.primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 .form > button:disabled { opacity: .6; }
 .book-list { display: flex; flex-direction: column; gap: 8px; }
-.book-list button { padding: 10px 14px; border-radius: 8px; border: 1px solid #ddd; background: none; cursor: pointer; font-size: 16px; }
+.book-list button { padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: none; cursor: pointer; font-size: 16px; }
 
 /* ---------- game picker ---------- */
 .game-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.game-pick button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 8px; border-radius: 12px; border: 1px solid #ddd; background: var(--bg); cursor: pointer; font-size: 16px; font-weight: 600; }
+.game-pick button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 8px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); cursor: pointer; font-size: 16px; font-weight: 600; }
 .game-icon { font-size: 30px; }
 
 /* ---------- shared board-game bits ---------- */
@@ -162,17 +218,17 @@ dialog .form { padding: 22px; min-width: 280px; text-align: center; }
 .ludo-3d canvas { display: block; }
 .ludo.is-3d .ludo-3d { display: block; }
 .ludo.is-3d .ludo-board, .ludo.is-3d .dice-pair { display: none; }
-.ludo-roll { --c: var(--ink); height: 64px; border-radius: 14px; border: 0; background: var(--c); color: #fff; font-size: 22px; font-weight: 800; cursor: pointer; }
+.ludo-roll { --c: var(--primary); height: 64px; border-radius: 14px; border: 0; background: var(--c); color: #fff; font-size: 22px; font-weight: 800; cursor: pointer; }
 .ludo-roll[hidden] { display: none; }
 .ludo-roll:disabled { opacity: .5; cursor: default; }
 .ludo-picks { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 10px; }
 .ludo-picks[hidden] { display: none; }
 .ludo-pick {
   --c: var(--ink);
-  height: 64px; border-radius: 14px; border: 3px solid color-mix(in srgb, var(--c) 35%, #fff);
+  height: 64px; border-radius: 14px; border: 3px solid color-mix(in srgb, var(--c) 35%, var(--surface));
   background: var(--surface); color: var(--ink); font-size: 30px; font-weight: 800; cursor: pointer;
 }
-.ludo-pick.selected { border-color: var(--c); background: color-mix(in srgb, var(--c) 14%, #fff); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 30%, transparent); }
+.ludo-pick.selected { border-color: var(--c); background: color-mix(in srgb, var(--c) 14%, var(--surface)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 30%, transparent); }
 .ludo-pick:disabled { opacity: .35; cursor: default; }
 .ludo-pick.used { text-decoration: line-through; }
 .ludo-pick.sum { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
@@ -219,7 +275,7 @@ dialog .form { padding: 22px; min-width: 280px; text-align: center; }
 .dice {
   --c: var(--ink);
   width: 64px; height: 64px; flex: none; border-radius: 14px; border: 3px solid var(--c);
-  background: #fff; cursor: pointer; padding: 8px; display: grid; place-items: center;
+  background: var(--surface); cursor: pointer; padding: 8px; display: grid; place-items: center;
 }
 .dice:disabled { opacity: .55; cursor: default; }
 .dice.ready { box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 30%, transparent); animation: nudge 1.4s ease-in-out infinite; }
@@ -270,7 +326,7 @@ dialog .form { padding: 22px; min-width: 280px; text-align: center; }
 .wcard.landed { animation: land .35s ease-out; }
 @keyframes land { from { transform: translateY(-30px) scale(1.1); opacity: .3; } }
 .shape-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-.shape-grid button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 2px; border: 1px solid #ddd; border-radius: 8px; background: none; cursor: pointer; font-size: 12px; text-transform: capitalize; }
+.shape-grid button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 2px; border: 1px solid var(--border); border-radius: 8px; background: none; cursor: pointer; font-size: 12px; text-transform: capitalize; }
 .shape-grid svg { width: 34px; height: 34px; fill: #7a1f2b; }
 dialog.shape-pick .form { min-width: 300px; }
 @media (min-width: 700px) { .wcard { --w: 88px; } }
@@ -286,7 +342,7 @@ dialog.shape-pick .form { min-width: 300px; }
 .now-playing b { font-size: 20px; }
 .now-playing button { padding: 12px 18px; border-radius: 10px; border: 0; font-size: 16px; cursor: pointer; }
 .lobby-games { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
-.game-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 18px 10px; border-radius: 14px; border: 1px solid #e3dfd6; background: var(--surface); cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,.05); }
+.game-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 18px 10px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,.05); }
 .game-card b { font-size: 17px; }
 .game-card small { color: var(--muted); font-size: 13px; text-align: center; }
 .game-card .game-icon { font-size: 36px; }

@@ -15,8 +15,17 @@ const DIE_SCALE = 1.75;
 const DIE_HALF = 0.4 * DIE_SCALE;
 const DIE_REST_Y = 0.36 + DIE_HALF; // resting on the tip of the centre pyramid
 const DIE_SPOTS = [[-0.78, 0.15], [0.78, -0.15]]; // where the dice land, middle of the board
-// Board colours, a little darker than the model's whites so the track doesn't glare.
-const RECOLOR = { Ludo_Field: "#8e95a1", Ludo_Tile: "#e6e8ec", Ludo_Pad: "#e6e8ec" };
+// Board colours, a little darker than the model's whites so the track doesn't glare;
+// darker again in dark mode.
+const RECOLOR = {
+  light: { Ludo_Field: "#8e95a1", Ludo_Tile: "#e6e8ec", Ludo_Pad: "#e6e8ec" },
+  dark: { Ludo_Field: "#4a505d", Ludo_Tile: "#b4b8c1", Ludo_Pad: "#b4b8c1" },
+};
+const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+const isDark = () => {
+  const t = document.documentElement.dataset.theme;
+  return t ? t === "dark" : darkQuery.matches;
+};
 // Rotation (x, y, z) that puts each value on top; an unrotated die shows 1.
 const DIE_FACE = {
   1: [0, 0, 0], 2: [-Math.PI / 2, 0, 0], 3: [0, 0, Math.PI / 2],
@@ -149,12 +158,21 @@ export async function createBoard3D(boardEl, { onToken, onDie }) {
   const board = stage(boardEl, GROUND, 1024);
   board.renderer.shadowMap.autoUpdate = false; // shadows only change when a token moves
   const set = gltf.scene.clone(true);
+  const boardMats = [];
   set.traverse((o) => {
     if (!o.isMesh) return;
     o.castShadow = true;
     o.receiveShadow = true;
-    for (const m of [o.material].flat()) if (RECOLOR[m.name]) m.color.set(RECOLOR[m.name]);
+    for (const m of [o.material].flat()) if (RECOLOR.light[m.name]) boardMats.push(m);
   });
+  const recolor = () => {
+    const palette = RECOLOR[isDark() ? "dark" : "light"];
+    for (const m of boardMats) m.color.set(palette[m.name]);
+  };
+  recolor();
+  darkQuery.addEventListener("change", recolor);
+  const themeWatch = new MutationObserver(recolor);
+  themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   board.scene.add(set);
   const extras = []; // rings we created, disposed on destroy
 
@@ -331,6 +349,8 @@ export async function createBoard3D(boardEl, { onToken, onDie }) {
     destroyed = true;
     cancelAnimationFrame(raf);
     resize.disconnect();
+    darkQuery.removeEventListener("change", recolor);
+    themeWatch.disconnect();
     for (const r of extras) { r.geometry.dispose(); r.material.dispose(); }
     for (const color of COLORS) for (const t of tokens[color]) t.mats.forEach((m) => m.dispose());
     for (const d of dice) d.mats.forEach((m) => m.dispose());

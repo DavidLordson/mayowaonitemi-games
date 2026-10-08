@@ -58,7 +58,7 @@ function letterAt(k) {
 }
 
 function colorOf(pid) {
-  return members[pid]?.color || "#1f2433";
+  return members[pid]?.color || "var(--ink)";
 }
 
 function setLetter(r, c, ch) {
@@ -537,6 +537,14 @@ $("clueText").onclick = () => { toggleDir(); moved(); };
 $("menuBtn").onclick = (e) => { e.stopPropagation(); $("menu").hidden = !$("menu").hidden; };
 document.addEventListener("click", () => { $("menu").hidden = true; });
 $("homeBtn").onclick = () => { if (session) showLobby(); };
+// ◐ cycles the theme: follow the device → dark → light → follow the device.
+$("themeBtn").onclick = () => {
+  const order = [undefined, "dark", "light"];
+  const next = order[(order.indexOf(document.documentElement.dataset.theme) + 1) % order.length];
+  if (next) document.documentElement.dataset.theme = next;
+  else delete document.documentElement.dataset.theme;
+  try { next ? localStorage.setItem("theme", next) : localStorage.removeItem("theme"); } catch {}
+};
 $("menu").onclick = async (e) => {
   const act = e.target.dataset.act;
   if (!act || !session) return;
