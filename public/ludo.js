@@ -62,6 +62,11 @@ export function mount(root, ctx) {
           </div>
           <div class="ludo-status"></div>
         </div>
+        <div class="ludo-tray" aria-label="Dice"></div>
+        <div class="ludo-picks" hidden>
+          <button class="ludo-pick" data-die="0"></button>
+          <button class="ludo-pick" data-die="1"></button>
+        </div>
         <ul class="game-log"></ul>
       </div>
       <div class="game-over" hidden>
@@ -71,6 +76,7 @@ export function mount(root, ctx) {
   const board = root.querySelector(".ludo-board");
   const tokenLayer = [];
   const diceBtns = [...root.querySelectorAll(".dice")];
+  const pickBtns = [...root.querySelectorAll(".ludo-pick")];
   let selDie = 0; // which die the next token tap uses
   const statusEl = root.querySelector(".ludo-status");
   let game = null;
@@ -119,9 +125,10 @@ export function mount(root, ctx) {
     else { selDie = i; update(game); }
   }
   diceBtns.forEach((btn, i) => { btn.onclick = () => tapDie(i); });
+  pickBtns.forEach((btn, i) => { btn.onclick = () => tapDie(i); });
 
   import("./ludo3d.js")
-    .then(({ createBoard3D }) => createBoard3D(root.querySelector(".ludo-3d"), {
+    .then(({ createBoard3D }) => createBoard3D(root.querySelector(".ludo-3d"), root.querySelector(".ludo-tray"), {
       onToken: (color, i) => tokenActions.get(color + i)?.(),
       onDie: tapDie,
     }))
@@ -160,7 +167,7 @@ export function mount(root, ctx) {
     const myTurn = current.pid === me && g.phase !== "over";
     const colorsOf = (p) => (p ? p.colors ?? [p.color] : []);
     const myColors = colorsOf(g.players.find((p) => p.pid === me));
-    const nameOf = (pid) => (pid === me ? "You" : members[pid]?.name || "Player");
+    const nameOf = (pid) => (pid === me ? "You" : pid === "cpu" ? "Computer" : members[pid]?.name || "Player");
 
     const dice = Array.isArray(g.dice) ? g.dice : null;
     const used = g.used || [false, false];
@@ -169,8 +176,8 @@ export function mount(root, ctx) {
       ? [0, 1].filter((d) => !used[d] && myColors.some((c) => movesFor(g, c, dice[d]).length))
       : [];
     if (!usable.includes(selDie)) selDie = usable[0] ?? 0;
-    // A token glows if either remaining die can move it; tapping uses the chosen die when it can.
-    const dieFor = (color, token) => [selDie, ...usable].find((d) => usable.includes(d) && canMoveWith(color, token, d));
+    // Tokens glow for the chosen number; pick the other number to see its moves.
+    const dieFor = (color, token) => (usable.includes(selDie) && canMoveWith(color, token, selDie) ? selDie : undefined);
     const justRolled = g.seq !== lastSeq && dice && lastSeq !== -1 && g.phase !== "over" && !g.last;
     lastSeq = g.seq;
     const canRoll = myTurn && g.phase === "roll" && !busy;
@@ -239,11 +246,20 @@ export function mount(root, ctx) {
       btn.classList.toggle("selected", usable.length > 1 && selDie === d);
       btn.style.setProperty("--c", COLOR_HEX[colorsOf(current)[0]]);
     });
+    const picks = root.querySelector(".ludo-picks");
+    picks.hidden = !(myTurn && g.phase === "move" && dice);
+    pickBtns.forEach((btn, d) => {
+      btn.textContent = dice?.[d] ?? "";
+      btn.disabled = busy || !usable.includes(d);
+      btn.classList.toggle("selected", usable.includes(d) && selDie === d);
+      btn.classList.toggle("used", !!used[d]);
+      btn.style.setProperty("--c", COLOR_HEX[colorsOf(current)[0]]);
+    });
     const left = dice ? dice.filter((_, d) => !used[d]) : [];
     let status;
     if (g.phase === "over") status = `${nameOf(g.winner)} won!`;
     else if (myTurn && g.phase === "roll") status = "Your turn — tap the dice to roll";
-    else if (myTurn) status = usable.length > 1 ? `Move ${dice[selDie]} — tap a glowing token (tap a die to switch)` : `Move ${left.join(" & ")} — tap a glowing token`;
+    else if (myTurn) status = usable.length > 1 ? `Pick a number, then tap a glowing token` : `Move ${left.join(" & ")} — tap a glowing token`;
     else status = `${nameOf(current.pid)}'s turn${g.phase === "move" && dice ? ` (rolled ${dice.join(" & ")})` : ""}`;
     statusEl.textContent = note || status;
     root.querySelector(".game-log").innerHTML = g.log.slice(-3).reverse().map((l) => `<li>${escapeHtml(l)}</li>`).join("");

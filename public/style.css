@@ -158,10 +158,23 @@ dialog .form { padding: 22px; min-width: 280px; text-align: center; }
 
 /* ---------- Ludo ---------- */
 .ludo { --size: min(calc(100vw - 16px), 540px); display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; align-items: flex-start; }
-.ludo-3d { display: none; width: var(--size); height: calc(var(--size) * .9); touch-action: manipulation; }
+.ludo-3d { display: none; width: var(--size); height: calc(var(--size) * .92); touch-action: manipulation; }
 .ludo-3d canvas { display: block; }
 .ludo.is-3d .ludo-3d { display: block; }
 .ludo.is-3d .ludo-board, .ludo.is-3d .dice-pair { display: none; }
+.ludo-tray { display: none; height: 130px; touch-action: manipulation; }
+.ludo-tray canvas { display: block; }
+.ludo.is-3d .ludo-tray { display: block; }
+.ludo-picks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ludo-picks[hidden] { display: none; }
+.ludo-pick {
+  --c: var(--ink);
+  height: 64px; border-radius: 14px; border: 3px solid color-mix(in srgb, var(--c) 35%, #fff);
+  background: var(--surface); color: var(--ink); font-size: 30px; font-weight: 800; cursor: pointer;
+}
+.ludo-pick.selected { border-color: var(--c); background: color-mix(in srgb, var(--c) 14%, #fff); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 30%, transparent); }
+.ludo-pick:disabled { opacity: .35; cursor: default; }
+.ludo-pick.used { text-decoration: line-through; }
 .ludo-board {
   width: var(--size); height: var(--size);
   display: grid; grid-template-columns: repeat(15, 1fr); grid-template-rows: repeat(15, 1fr);

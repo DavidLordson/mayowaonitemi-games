@@ -7,6 +7,7 @@ const BOARD_GAMES = { ludo: { ui: ludoUi, title: "Ludo" }, whot: { ui: whotUi, t
 const COLORS = ["#e5484d", "#3b82f6", "#16a34a", "#9333ea", "#ea580c"];
 const POLL_MS = 1000;
 const HIDDEN_POLL_MS = 5000;
+const BOT_POLL_MS = 650;
 const HEARTBEAT_MS = 10000;
 const ONLINE_MS = 20000;
 
@@ -116,6 +117,8 @@ async function applyState(state) {
   if (meta && state.meta.startedAt < meta.startedAt) return; // a response from before the latest game began
   lastServerSkew = state.now - Date.now();
   members = state.members;
+  const g = state.game;
+  botTurn = !!g && g.phase !== "over" && g.players?.[g.turn]?.pid === "cpu";
   if (rooms[session.room] && rooms[session.room].roomName !== state.roomName) {
     rooms[session.room].roomName = state.roomName;
     saveRooms();
@@ -215,7 +218,9 @@ function renderLobby(state) {
 $("lobbyContinue").onclick = () => { leaveLobby(); setStatus("Loading…"); poll(); };
 $("allRooms").onclick = () => showHome();
 document.querySelectorAll("#lobbyView [data-start]").forEach((b) => {
-  b.onclick = () => startGame(b.dataset.start === "crossword" ? { game: "crossword", puzzleId: "random" } : { game: b.dataset.start });
+  b.onclick = () => startGame(b.dataset.start === "crossword"
+    ? { game: "crossword", puzzleId: "random" }
+    : { game: b.dataset.start, ...("cpu" in b.dataset ? { vsComputer: true } : {}) });
 });
 
 // ---------- board games ----------
@@ -250,6 +255,7 @@ function showCrossword() {
 }
 
 let pollTimer = null;
+let botTurn = false; // poll faster while the computer is playing, so its moves show promptly
 async function poll() {
   clearTimeout(pollTimer);
   if (!session) return;
@@ -260,7 +266,7 @@ async function poll() {
     if (lostAccess(err)) return;
     setStatus("Reconnecting…");
   }
-  if (session) pollTimer = setTimeout(poll, document.hidden ? HIDDEN_POLL_MS : POLL_MS);
+  if (session) pollTimer = setTimeout(poll, document.hidden ? HIDDEN_POLL_MS : botTurn ? BOT_POLL_MS : POLL_MS);
 }
 document.addEventListener("visibilitychange", () => { if (!document.hidden && session) poll(); });
 

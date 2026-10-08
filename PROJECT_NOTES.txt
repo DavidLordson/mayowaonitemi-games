@@ -19,6 +19,9 @@ HOW IT WORKS
 - Ludo is 3D: public/ludo3d.js draws public/models/ludo_set.glb (made in Blender) with
   three.js r169 vendored in public/vendor/three (import map in index.html). Falls back
   to the flat CSS board if 3D fails.
+- Ludo vs computer: lobby card -> new game with players [you, "cpu"]. The bot
+  (botMove in lib/games/ludo.mjs) plays on the server, one action per request, 600 ms
+  apart (botStep in room.mts); clients poll every 650 ms during its turn.
 
 HOUSE RULES
 - Ludo: two dice, each die used once on any token; 6 brings a token out; double 6 /

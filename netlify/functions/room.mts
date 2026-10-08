@@ -89,6 +89,21 @@ async function players(gameId: string) {
 }
 
 const gameKey = (gameId: string) => `games/${gameId}/state`;
+const BOT_DELAY_MS = 600; // pause before each computer action, so people can follow it
+
+// The computer plays when anyone's request finds it's its turn: one action (roll or move)
+// per request, at most one every BOT_DELAY_MS. Ludo only.
+async function botStep(meta: Meta) {
+  if (meta.game !== "ludo") return;
+  const found = await store().getWithMetadata(gameKey(meta.gameId), { type: "json" });
+  const state = found?.data as any;
+  if (!state || state.phase === "over" || state.players[state.turn].pid !== ludo.BOT) return;
+  if (Date.now() - (state.at ?? 0) < BOT_DELAY_MS) return;
+  const next = ludo.play(state, ludo.BOT, ludo.botMove(state, rand), rand, { [ludo.BOT]: ludo.BOT_NAME });
+  if (next.error) return;
+  next.at = Date.now();
+  await store().setJSON(gameKey(meta.gameId), next, { onlyIfMatch: found!.etag }); // someone else may have just done it
+}
 
 async function stateFor(room: string, roomData: Room, pid: string) {
   const members = Object.fromEntries(
@@ -128,6 +143,7 @@ export default async (req: Request) => {
       const puzzle = await store().get(`games/${current.data.meta.gameId}/puzzle`, { type: "json" });
       return puzzle ? json({ gameId: current.data.meta.gameId, puzzle }) : fail(404, "no generated puzzle for this game");
     }
+    await botStep(current.data.meta);
     return json(await stateFor(room, current.data, pid));
   }
 
@@ -237,7 +253,9 @@ export default async (req: Request) => {
     if (current.data.meta.gameId !== body.fromGameId) return json(await stateFor(room, current.data, pid));
     const gameId = newGameId();
     let generated = current.data.generated ?? 0;
-    if (ENGINES[game]) {
+    if (game === "ludo" && body.vsComputer) {
+      await store().setJSON(gameKey(gameId), { ...ludo.newGame([pid, ludo.BOT]), at: Date.now() });
+    } else if (ENGINES[game]) {
       // Everyone in the room plays (up to 4), in the order they joined — so seats stay
       // the same game after game (in 2-player Ludo the room's first member is red + yellow).
       const seated = Object.entries(current.data.members)
@@ -265,12 +283,14 @@ export default async (req: Request) => {
     const engine = type && ENGINES[type];
     if (!engine || body.gameId !== gameId) return fail(409, "That game has ended.");
     const names = Object.fromEntries(Object.entries(current.data.members).map(([id, m]) => [id, m.name]));
+    names[ludo.BOT] = ludo.BOT_NAME;
     // Turn-based, so clashes are rare; a conditional write keeps two moves from both landing.
     for (let attempt = 0; attempt < 4; attempt++) {
       const found = await store().getWithMetadata(gameKey(gameId), { type: "json" });
       if (!found) return fail(404, "game not found");
       const next = engine.play(found.data, pid, body.move ?? {}, rand, names);
       if (next.error) return fail(422, next.error);
+      next.at = Date.now();
       const { modified } = await store().setJSON(gameKey(gameId), next, { onlyIfMatch: found.etag });
       if (modified) return json(await stateFor(room, current.data, pid));
     }

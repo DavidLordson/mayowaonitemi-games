@@ -37,6 +37,31 @@ const two = ludo.newGame(["a", "b"]);
 if (two.players[0].colors.join() !== "red,yellow" || two.players[1].colors.join() !== "green,blue") fail("ludo: 2-player houses wrong");
 console.log(`ludo: ${games} games finished ok (${Math.round(ludoTurns / games)} actions per game)`);
 
+// The computer only makes legal moves, finishes games, and beats a random player most of the time.
+{
+  let botWins = 0;
+  for (let g = 0; g < games; g++) {
+    let s = ludo.newGame([ludo.BOT, "h"]);
+    for (let step = 0; s.phase !== "over"; step++) {
+      if (step > 20000) fail("ludo bot game never ended");
+      const p = s.players[s.turn];
+      let move = { type: "roll" };
+      if (p.pid === ludo.BOT) move = ludo.botMove(s, rand);
+      else if (s.phase === "move") {
+        const die = pick(ludo.usableDice(s, p));
+        const color = pick(ludo.colorsOf(p).filter((c) => ludo.movesFor(s, c, s.dice[die]).length));
+        move = { type: "move", die, color, token: pick(ludo.movesFor(s, color, s.dice[die])) };
+      }
+      const next = ludo.play(s, p.pid, move, rand);
+      if (next.error) fail(`ludo bot error: ${next.error} (${JSON.stringify(move)})`);
+      s = next;
+    }
+    if (s.winner === ludo.BOT) botWins++;
+  }
+  if (botWins < games * 0.6) fail(`ludo: computer won only ${botWins}/${games} against random moves`);
+  console.log(`ludo: computer beat random moves in ${botWins}/${games} games`);
+}
+
 // A 2 can be blocked with another 2, and the pick grows.
 {
   const two = (id, shape) => ({ id, shape, n: 2 });
