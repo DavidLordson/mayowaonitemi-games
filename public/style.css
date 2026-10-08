@@ -142,3 +142,115 @@ dialog .form { padding: 22px; min-width: 280px; text-align: center; }
 .form > button:disabled { opacity: .6; }
 .book-list { display: flex; flex-direction: column; gap: 8px; }
 .book-list button { padding: 10px 14px; border-radius: 8px; border: 1px solid #ddd; background: none; cursor: pointer; font-size: 16px; }
+
+/* ---------- game picker ---------- */
+.game-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.game-pick button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 8px; border-radius: 12px; border: 1px solid #ddd; background: var(--bg); cursor: pointer; font-size: 16px; font-weight: 600; }
+.game-icon { font-size: 30px; }
+
+/* ---------- shared board-game bits ---------- */
+.board-view { padding: 8px 8px 24px; }
+.game-log { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; color: var(--muted); text-align: center; }
+.game-log li:first-child { color: var(--ink); }
+.game-over { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 25; }
+.game-over[hidden] { display: none; }
+.game-over button { padding: 10px 14px; border-radius: 8px; cursor: pointer; font-size: 16px; }
+
+/* ---------- Ludo ---------- */
+.ludo { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; align-items: flex-start; }
+.ludo-board {
+  --size: min(calc(100vw - 16px), 540px);
+  width: var(--size); height: var(--size);
+  display: grid; grid-template-columns: repeat(15, 1fr); grid-template-rows: repeat(15, 1fr);
+  background: #fff; border: 2px solid var(--ink); border-radius: 6px; overflow: hidden; position: relative;
+}
+.ludo-yard { background: var(--c); display: grid; grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(6, 1fr); }
+.ludo-yard > div { grid-area: 2 / 2 / span 4 / span 4; background: #fff; border-radius: 10%; box-shadow: inset 0 0 0 2px rgba(0,0,0,.08); }
+.ludo-sq { border: .5px solid #cfd2da; background: #fff; position: relative; }
+.ludo-sq.tinted { background: var(--c); }
+.ludo-sq.star::after { content: "★"; position: absolute; inset: 0; display: grid; place-items: center; color: #9aa0ad; font-size: calc(var(--size) / 15 * .55); }
+.ludo-center { background: conic-gradient(from 45deg, #16a34a 0 25%, #eab308 0 50%, #3b82f6 0 75%, #e5484d 0); }
+.ludo-token {
+  --shift: 0;
+  z-index: 2; border: 0; padding: 0; background: none; place-self: center;
+  width: calc(var(--size) / 15 * .78); height: calc(var(--size) / 15 * .78);
+  border-radius: 50%; position: relative;
+  transform: translate(calc(var(--shift) * 18%), calc(var(--shift) * -18%));
+  transition: transform .2s;
+}
+.ludo-token::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.7), transparent 45%), var(--c);
+  border: 2px solid rgba(0,0,0,.45); box-shadow: 0 2px 3px rgba(0,0,0,.35);
+}
+.ludo-token.movable { cursor: pointer; z-index: 3; }
+.ludo-token.movable::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 3px solid var(--ink); animation: pulse 0.9s ease-in-out infinite; }
+.ludo-token.just-moved::before { box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--c); }
+@keyframes pulse { 50% { transform: scale(1.18); opacity: .5; } }
+.ludo-side { display: flex; flex-direction: column; gap: 12px; width: min(100%, 360px); }
+.ludo-players { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ludo-player { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 10px; background: var(--surface); border: 2px solid transparent; font-size: 14px; }
+.ludo-player i { width: 12px; height: 12px; border-radius: 50%; background: var(--c); flex: none; }
+.ludo-player span { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ludo-player small { color: var(--muted); }
+.ludo-player.turn { border-color: var(--c); }
+.ludo-controls { display: flex; align-items: center; gap: 14px; background: var(--surface); padding: 12px; border-radius: 12px; }
+.ludo-status { flex: 1; font-size: 15px; }
+.dice {
+  --c: var(--ink);
+  width: 64px; height: 64px; flex: none; border-radius: 14px; border: 3px solid var(--c);
+  background: #fff; cursor: pointer; padding: 8px; display: grid; place-items: center;
+}
+.dice:disabled { opacity: .55; cursor: default; }
+.dice.ready { box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 30%, transparent); animation: nudge 1.4s ease-in-out infinite; }
+.dice.rolling { animation: roll .45s ease-out; }
+.dice .pips { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); width: 100%; height: 100%; }
+.dice .pips i { border-radius: 50%; margin: 2px; }
+.dice .pips i.on { background: var(--ink); }
+.dice-label { font-weight: 700; }
+@keyframes roll { 0% { transform: rotate(0) scale(.6); } 60% { transform: rotate(300deg) scale(1.1); } 100% { transform: rotate(360deg) scale(1); } }
+@keyframes nudge { 50% { transform: scale(1.06); } }
+
+/* ---------- Whot ---------- */
+.whot { --maroon: #7a1f2b; max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.whot-opponents { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.whot-opp { background: var(--surface); border-radius: 12px; padding: 8px 12px; text-align: center; border: 2px solid transparent; min-width: 140px; }
+.whot-opp.turn { border-color: var(--maroon); }
+.opp-name { display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600; }
+.opp-name i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
+.opp-cards { display: flex; justify-content: center; margin: 6px 0 2px; height: 42px; }
+.opp-cards .mini + .mini { margin-left: -18px; }
+.whot-opp small { color: var(--muted); }
+.whot-table { display: flex; justify-content: center; align-items: center; gap: 28px; padding: 16px; background: #1f6b45; border-radius: 16px; box-shadow: inset 0 0 30px rgba(0,0,0,.3); }
+.whot-market { background: none; border: 0; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; color: #fff; }
+.whot-market:disabled { cursor: default; }
+.whot-market.ready .wcard { box-shadow: 0 0 0 3px #ffd84d; }
+.market-count { font-size: 13px; }
+.whot-request { text-align: center; font-size: 15px; }
+.whot-request svg.inline { width: 18px; height: 18px; vertical-align: -3px; fill: var(--maroon); }
+.whot-status { text-align: center; font-size: 15px; min-height: 20px; }
+.whot-hand { display: flex; gap: 8px; overflow-x: auto; padding: 14px 6px 10px; justify-content: safe center; }
+.wcard {
+  --w: 74px;
+  width: var(--w); height: calc(var(--w) * 1.42); flex: none; position: relative;
+  background: #fffdf8; border-radius: 9px; border: 1px solid #d8d2c4; box-shadow: 0 2px 4px rgba(0,0,0,.18);
+  color: var(--maroon); display: grid; place-items: center; user-select: none;
+}
+.wcard .big { width: 62%; fill: var(--maroon); }
+.wcard b { position: absolute; font-size: calc(var(--w) * .2); line-height: 1; }
+.wcard .tl { top: 6px; left: 7px; }
+.wcard .br { bottom: 6px; right: 7px; transform: rotate(180deg); }
+.wcard.whot20 { background: linear-gradient(160deg, #fffdf8, #f6e7d2); }
+.whot-word { font-weight: 800; letter-spacing: .04em; font-size: calc(var(--w) * .22); transform: rotate(-20deg); }
+.wcard.back { background: repeating-linear-gradient(45deg, var(--maroon) 0 6px, #8e2a37 6px 12px); border-color: #5c1620; color: #fff; }
+.wcard.back span { font-weight: 800; font-size: 14px; background: var(--maroon); padding: 2px 6px; border-radius: 4px; }
+.wcard.mini { --w: 30px; border-radius: 4px; }
+.wcard.playable { cursor: pointer; transform: translateY(-10px); box-shadow: 0 0 0 3px #ffd84d, 0 6px 10px rgba(0,0,0,.25); transition: transform .15s; }
+.wcard.dim { opacity: .5; }
+.wcard.landed { animation: land .35s ease-out; }
+@keyframes land { from { transform: translateY(-30px) scale(1.1); opacity: .3; } }
+.shape-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.shape-grid button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 2px; border: 1px solid #ddd; border-radius: 8px; background: none; cursor: pointer; font-size: 12px; text-transform: capitalize; }
+.shape-grid svg { width: 34px; height: 34px; fill: #7a1f2b; }
+dialog.shape-pick .form { min-width: 300px; }
+@media (min-width: 700px) { .wcard { --w: 88px; } }

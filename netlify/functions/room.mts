@@ -5,6 +5,7 @@
 //   rooms/<room>/invites/<code>    { kind, pid?, expires }  – one-time invite / device-login links
 //   games/<gameId>/players/<pid>   { cells, cursor, seen }  – one player's letters
 //   games/<gameId>/puzzle          puzzle JSON              – only for generated puzzles
+//   games/<gameId>/state           Ludo / Whot game state   – changed only through the rules in lib/games
 //
 // Every device holds a secret token; the room stores only its SHA-256 hash. A request
 // is allowed into a room only if its token matches one of the room's members.
@@ -12,12 +13,15 @@
 // overwrite each other; readers merge all players' blobs cell by cell, newest wins.
 import { getStore } from "@netlify/blobs";
 import type { Config } from "@netlify/functions";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomInt } from "node:crypto";
+import * as ludo from "../../lib/games/ludo.mjs";
+import * as whot from "../../lib/games/whot.mjs";
 import { generatePuzzle } from "../../lib/generator.mjs";
 import words from "../../lib/words.mjs";
 
 type Member = { name: string; color: string; tokens: string[]; joinedAt: number };
-type Meta = { gameId: string; puzzleId: string; startedAt: number };
+type GameType = "crossword" | "ludo" | "whot";
+type Meta = { gameId: string; game?: GameType; puzzleId?: string; startedAt: number }; // no game = crossword
 type Room = { name: string; createdAt: number; members: Record<string, Member>; meta: Meta; generated?: number };
 type Invite = { kind: "member" | "device"; pid?: string; expires: number; by: string };
 type PlayerDoc = {
@@ -26,6 +30,8 @@ type PlayerDoc = {
   seen: number;
 };
 
+const ENGINES: Record<string, any> = { ludo, whot };
+const rand = () => randomInt(0, 2 ** 32) / 2 ** 32;
 const DEFAULT_PUZZLE = "puzzle-001";
 const RANDOM_PUZZLE = "random"; // meta.puzzleId for generated puzzles; the puzzle itself is stored per game
 const MEMBER_INVITE_MS = 7 * 24 * 3600 * 1000;
@@ -82,11 +88,23 @@ async function players(gameId: string) {
   return out;
 }
 
+const gameKey = (gameId: string) => `games/${gameId}/state`;
+
 async function stateFor(room: string, roomData: Room, pid: string) {
   const members = Object.fromEntries(
     Object.entries(roomData.members).map(([id, m]) => [id, { name: m.name, color: m.color }]),
   );
-  return { room, roomName: roomData.name, me: pid, meta: roomData.meta, members, players: await players(roomData.meta.gameId), now: Date.now() };
+  const { gameId, game: type } = roomData.meta;
+  const engine = type && ENGINES[type];
+  const [playerDocs, game] = await Promise.all([
+    players(gameId),
+    engine ? store().get(gameKey(gameId), { type: "json" }) : null,
+  ]);
+  return {
+    room, roomName: roomData.name, me: pid, meta: roomData.meta, members, players: playerDocs,
+    game: game ? engine.view(game, pid) : null,
+    now: Date.now(),
+  };
 }
 
 function addDevice(member: Member) {
@@ -213,12 +231,21 @@ export default async (req: Request) => {
   }
 
   if (body.action === "new") {
+    const game: GameType = ENGINES[body.game] ? body.game : "crossword";
     const puzzleId = String(body.puzzleId ?? DEFAULT_PUZZLE);
     if (!ID.test(puzzleId)) return fail(400, "invalid puzzle");
     if (current.data.meta.gameId !== body.fromGameId) return json(await stateFor(room, current.data, pid));
     const gameId = newGameId();
     let generated = current.data.generated ?? 0;
-    if (puzzleId === RANDOM_PUZZLE) {
+    if (ENGINES[game]) {
+      // Everyone in the room plays (up to 4), starting with whoever began the game.
+      const others = Object.entries(current.data.members)
+        .filter(([id]) => id !== pid)
+        .sort(([, a], [, b]) => a.joinedAt - b.joinedAt)
+        .map(([id]) => id);
+      if (!others.length) return fail(400, "Invite someone to the room first — this game needs at least 2 players.");
+      await store().setJSON(gameKey(gameId), ENGINES[game].newGame([pid, ...others], rand));
+    } else if (puzzleId === RANDOM_PUZZLE) {
       generated++;
       const puzzle = generatePuzzle(words, { id: `${RANDOM_PUZZLE}-${gameId}`, title: `Puzzle #${generated}` });
       await store().setJSON(`games/${gameId}/puzzle`, puzzle);
@@ -226,11 +253,28 @@ export default async (req: Request) => {
     // Both players may press "new game" together; only start one new game per old one.
     const updated = await updateRoom(room, (r) => {
       if (r.meta.gameId !== body.fromGameId) return null;
-      r.meta = { gameId, puzzleId, startedAt: Date.now() };
+      r.meta = ENGINES[game] ? { gameId, game, startedAt: Date.now() } : { gameId, game, puzzleId, startedAt: Date.now() };
       r.generated = generated;
       return r;
     });
     return json(await stateFor(room, updated!, pid));
+  }
+
+  if (body.action === "play") {
+    const { gameId, game: type } = current.data.meta;
+    const engine = type && ENGINES[type];
+    if (!engine || body.gameId !== gameId) return fail(409, "That game has ended.");
+    const names = Object.fromEntries(Object.entries(current.data.members).map(([id, m]) => [id, m.name]));
+    // Turn-based, so clashes are rare; a conditional write keeps two moves from both landing.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const found = await store().getWithMetadata(gameKey(gameId), { type: "json" });
+      if (!found) return fail(404, "game not found");
+      const next = engine.play(found.data, pid, body.move ?? {}, rand, names);
+      if (next.error) return fail(422, next.error);
+      const { modified } = await store().setJSON(gameKey(gameId), next, { onlyIfMatch: found.etag });
+      if (modified) return json(await stateFor(room, current.data, pid));
+    }
+    return fail(409, "Busy — try again.");
   }
 
   if (body.action === "profile") {

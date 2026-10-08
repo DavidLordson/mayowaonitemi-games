@@ -1,4 +1,8 @@
 import { buildPuzzle } from "./crossword.js";
+import * as ludoUi from "./ludo.js";
+import * as whotUi from "./whot.js";
+
+const BOARD_GAMES = { ludo: { ui: ludoUi, title: "Ludo" }, whot: { ui: whotUi, title: "Whot" } };
 
 const COLORS = ["#e5484d", "#3b82f6", "#16a34a", "#9333ea", "#ea580c"];
 const POLL_MS = 1000;
@@ -115,7 +119,22 @@ async function applyState(state) {
     rooms[session.room].roomName = state.roomName;
     saveRooms();
   }
-  if (!meta || state.meta.gameId !== meta.gameId) {
+  const type = state.meta.game || "crossword";
+  if (BOARD_GAMES[type]) {
+    if (!meta || state.meta.gameId !== meta.gameId || !boardGame) {
+      meta = state.meta;
+      puzzle = null;
+      myEdits = {};
+      outbox = {};
+      $("banner").hidden = true;
+      showBoardGame(type, state.roomName);
+    }
+    players = state.players;
+    if (state.game) boardGame.update(state.game);
+    renderPlayers(Date.now() + lastServerSkew);
+    return;
+  }
+  if (!meta || state.meta.gameId !== meta.gameId || boardGame) {
     if (loadingGame === state.meta.gameId) return; // another response is already loading it
     loadingGame = state.meta.gameId;
     let data;
@@ -127,10 +146,42 @@ async function applyState(state) {
     wrong.clear();
     solvedShown = false;
     $("banner").hidden = true;
+    showCrossword();
     setupPuzzle(buildPuzzle(data), state.roomName);
   }
   players = state.players;
   render();
+}
+
+// ---------- board games ----------
+
+let boardGame = null; // the mounted Ludo / Whot view, or null while playing the crossword
+
+function showBoardGame(type, roomName) {
+  $("crosswordView").hidden = true;
+  $("boardView").hidden = false;
+  document.querySelectorAll("[data-cw]").forEach((el) => { el.hidden = true; });
+  $("title").textContent = `${roomName} · ${BOARD_GAMES[type].title}`;
+  boardGame = BOARD_GAMES[type].ui.mount($("boardView"), {
+    me: () => session?.pid,
+    members: () => members,
+    newGame,
+    play: async (move) => {
+      try {
+        await applyState(await api("POST", { action: "play", room: session.room, gameId: meta.gameId, move }));
+      } catch (err) {
+        if (!lostAccess(err)) throw err;
+      }
+    },
+  });
+}
+
+function showCrossword() {
+  boardGame = null;
+  $("boardView").innerHTML = "";
+  $("boardView").hidden = true;
+  $("crosswordView").hidden = false;
+  document.querySelectorAll("[data-cw]").forEach((el) => { el.hidden = false; });
 }
 
 let pollTimer = null;
@@ -417,7 +468,8 @@ document.addEventListener("click", () => { $("menu").hidden = true; });
 $("homeBtn").onclick = () => showHome();
 $("menu").onclick = async (e) => {
   const act = e.target.dataset.act;
-  if (!act || !puzzle || !session) return;
+  if (!act || !session) return;
+  if ((act === "check" || act === "reveal") && !puzzle) return;
   if (act === "check") {
     wrong = new Set();
     for (let r = 0; r < puzzle.height; r++) for (let c = 0; c < puzzle.width; c++) {
@@ -476,18 +528,26 @@ async function newGame() {
     const b = document.createElement("button");
     b.type = "button";
     b.textContent = p.title;
-    b.onclick = () => startGame(p.id);
+    b.onclick = () => startGame({ game: "crossword", puzzleId: p.id });
     box.appendChild(b);
   }
-  $("newRandom").onclick = () => startGame("random");
+  $("newRandom").onclick = () => startGame({ game: "crossword", puzzleId: "random" });
+  document.querySelectorAll("#newDialog [data-game]").forEach((b) => { b.onclick = () => startGame({ game: b.dataset.game }); });
   $("newDialog").showModal();
 }
 
-async function startGame(puzzleId) {
+async function startGame(choice) {
   $("newDialog").close();
-  setStatus(puzzleId === "random" ? "Making a new puzzle…" : "Starting…");
-  try { await applyState(await api("POST", { action: "new", room: session.room, puzzleId, fromGameId: meta.gameId })); setStatus(""); }
-  catch (err) { if (!lostAccess(err)) setStatus("Couldn't start a new game"); }
+  if (!meta) return;
+  setStatus(choice.puzzleId === "random" ? "Making a new puzzle…" : "Starting…");
+  try {
+    await applyState(await api("POST", { action: "new", room: session.room, fromGameId: meta.gameId, ...choice }));
+    setStatus("");
+  } catch (err) {
+    if (lostAccess(err)) return;
+    setStatus("");
+    alert(err.message || "Couldn't start a new game");
+  }
 }
 $("bannerNew").onclick = newGame;
 $("bannerClose").onclick = () => { $("banner").hidden = true; };
@@ -637,6 +697,7 @@ function enterRoom(room) {
   session = { room, pid: creds.pid, token: creds.token };
   meta = null;
   puzzle = null;
+  if (boardGame) showCrossword();
   members = {};
   players = {};
   history.replaceState(null, "", `/?room=${room}`);

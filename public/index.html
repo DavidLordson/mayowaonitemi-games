@@ -18,8 +18,8 @@
   <div id="menu" class="menu" hidden>
     <button data-act="invite">Invite someone</button>
     <button data-act="device">Log in on another device</button>
-    <button data-act="check">Check puzzle</button>
-    <button data-act="reveal">Reveal letter</button>
+    <button data-act="check" data-cw>Check puzzle</button>
+    <button data-act="reveal" data-cw>Reveal letter</button>
     <button data-act="name">Change name / colour</button>
     <button data-act="new">New game</button>
     <button data-act="logout">Log out of this room</button>
@@ -58,6 +58,8 @@
 
   <!-- The game -->
   <div id="gameScreen" hidden>
+    <div id="boardView" class="board-view" hidden></div>
+    <div id="crosswordView">
     <main class="layout">
       <section class="board">
         <div id="grid" class="grid"></div>
@@ -77,6 +79,7 @@
       </div>
       <div id="keyboard" class="keyboard"></div>
     </footer>
+    </div>
   </div>
 
   <div id="banner" class="banner" hidden>
@@ -100,9 +103,13 @@
   <dialog id="newDialog">
     <form method="dialog" class="form">
       <p class="banner-title">New game</p>
-      <p class="muted">This clears the board for everyone in the room.</p>
-      <button type="button" id="newRandom" class="primary">🎲 New random puzzle</button>
-      <p class="muted">Or play a puzzle from the book:</p>
+      <p class="muted">This ends the current game for everyone in the room.</p>
+      <div class="game-pick">
+        <button type="button" data-game="ludo"><span class="game-icon">🎲</span>Ludo</button>
+        <button type="button" data-game="whot"><span class="game-icon">🃏</span>Whot</button>
+      </div>
+      <p class="muted">Crossword</p>
+      <button type="button" id="newRandom" class="primary">✏️ New random crossword</button>
       <div id="bookList" class="book-list"></div>
       <button value="cancel">Cancel</button>
     </form>
