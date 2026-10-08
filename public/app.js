@@ -8,6 +8,7 @@ const COLORS = ["#e5484d", "#3b82f6", "#16a34a", "#9333ea", "#ea580c"];
 const POLL_MS = 1000;
 const HIDDEN_POLL_MS = 5000;
 const BOT_POLL_MS = 650;
+const LIVE_POLL_MS = 15000; // with a live connection, polling is only a safety net
 const HEARTBEAT_MS = 10000;
 const ONLINE_MS = 20000;
 
@@ -266,9 +267,45 @@ async function poll() {
     if (lostAccess(err)) return;
     setStatus("Reconnecting…");
   }
-  if (session) pollTimer = setTimeout(poll, document.hidden ? HIDDEN_POLL_MS : botTurn ? BOT_POLL_MS : POLL_MS);
+  if (session) pollTimer = setTimeout(poll, document.hidden ? HIDDEN_POLL_MS : live?.open ? LIVE_POLL_MS : botTurn ? BOT_POLL_MS : POLL_MS);
 }
-document.addEventListener("visibilitychange", () => { if (!document.hidden && session) poll(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden || !session) return;
+  if (!live) connectLive();
+  poll();
+});
+
+// ---------- live updates ----------
+// The server pushes the room's state over a WebSocket whenever it changes. If the
+// connection isn't there (or the host has no /api/room/ws), polling carries on as before.
+
+let live = null; // { ws, open }
+let liveRetries = 0;
+let liveTimer = null;
+function connectLive() {
+  clearTimeout(liveTimer);
+  if (live) { live.ws.onclose = null; live.ws.close(); live = null; }
+  if (!session || typeof WebSocket === "undefined") return;
+  const { room, token } = session;
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/room/ws?room=${room}`);
+  live = { ws, open: false };
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: "auth", token }));
+    live.open = true;
+    liveRetries = 0;
+  };
+  ws.onmessage = (e) => {
+    let state;
+    try { state = JSON.parse(e.data); } catch { return; }
+    applyState(state);
+  };
+  ws.onclose = (e) => {
+    live = null;
+    if (!session || session.room !== room) return;
+    if (e.code === 4003) { poll(); return; } // not a member any more: the poll shows why
+    liveTimer = setTimeout(connectLive, Math.min(30000, 1000 * 2 ** liveRetries++));
+  };
+}
 
 let flushTimer = null;
 function flushSoon() {
@@ -671,6 +708,7 @@ function showScreen(id) {
 
 function showHome(notice) {
   session = null;
+  connectLive(); // closes it
   inLobby = false;
   lobbyState = null;
   clearTimeout(pollTimer);
@@ -766,6 +804,7 @@ function enterRoom(room) {
     return;
   }
   session = { room, pid: creds.pid, token: creds.token };
+  connectLive();
   meta = null;
   puzzle = null;
   if (boardGame) showCrossword();

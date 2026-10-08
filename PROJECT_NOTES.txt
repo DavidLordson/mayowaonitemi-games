@@ -9,6 +9,14 @@ WHERE
 - Push to the branch = auto deploy (~1 min). Build runs `npm run validate` (tests).
 - Cloud sessions can't reach *.netlify.app; check deploys via Netlify MCP get-project.
 
+CLOUDFLARE (moving here from Netlify)
+- wrangler.jsonc + worker/index.mjs: a Worker serves public/ and /api/room; one Durable
+  Object per room holds its data. Same API as netlify/functions/room.mts, plus a live
+  WebSocket (/api/room/ws) that pushes state on every change, and the computer's Ludo
+  turns run on Durable Object alarms. Cloudflare builds from the repo's default branch
+  (Workers & Pages Git import). Rooms from Netlify don't carry over.
+- Test locally: npx wrangler@4 dev (then http://localhost:8787).
+
 HOW IT WORKS
 - Static front end in public/ + one function netlify/functions/room.mts (/api/room)
   + Netlify Blobs. Phones poll ~1s.

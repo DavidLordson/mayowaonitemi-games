@@ -1,0 +1,15 @@
+// Cloudflare Workers config. The Worker serves public/ as static files and runs
+// worker/index.mjs for /api/room (one Durable Object per room).
+// "name" must match the Worker's name in the Cloudflare dashboard.
+{
+  "name": "mayowaonitemi-games",
+  "main": "worker/index.mjs",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": "public", "binding": "ASSETS" },
+  "durable_objects": {
+    "bindings": [{ "name": "ROOMS", "class_name": "RoomObject" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RoomObject"] }],
+  "observability": { "enabled": true }
+}
