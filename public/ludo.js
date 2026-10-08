@@ -173,6 +173,7 @@ export function mount(root, ctx) {
       const next = rules.play(game, ctx.me(), move, Math.random, names);
       if (next.error) { note = next.error; update(game); return; }
       pendingSeq = next.seq;
+      sel = null; // the ring goes once the piece has moved; tap a piece to pick again
       update(next);
     }
     pending++;
@@ -222,14 +223,7 @@ export function mount(root, ctx) {
       if (!used[0] && !used[1] && canUseBoth(pos, dice[0], dice[1])) out.push({ both: true });
       return out;
     };
-    const movableTokens = moving
-      ? myColors.flatMap((color) => [0, 1, 2, 3].filter((i) => optionsFor(color, i).length).map((token) => ({ color, token })))
-      : [];
     if (sel && !optionsFor(sel.color, sel.token).length) sel = null;
-    // Always have a piece picked: the one that just moved if it can go on, else the first that can.
-    if (!sel && movableTokens.length) {
-      sel = movableTokens.find((t) => g.last && t.color === g.last.color && t.token === g.last.token) ?? movableTokens[0];
-    }
     options = sel ? optionsFor(sel.color, sel.token) : [];
     const justRolled = g.seq !== lastSeq && dice && lastSeq !== -1 && g.phase !== "over" && !g.last;
     lastSeq = g.seq;
@@ -318,7 +312,7 @@ export function mount(root, ctx) {
     let status;
     if (g.phase === "over") status = `${nameOf(g.winner)} won!`;
     else if (myTurn && g.phase === "roll") status = "Your turn — roll the dice";
-    else if (myTurn) status = "Tap a number to move the glowing piece — or tap another piece first";
+    else if (myTurn) status = sel ? "Tap a number to move it (or tap another piece)" : "Tap a piece, then a number";
     else status = `${nameOf(current.pid)}'s turn${g.phase === "move" && dice ? ` (rolled ${dice.join(" & ")})` : ""}`;
     statusEl.textContent = note || status;
     root.querySelector(".game-log").innerHTML = g.log.slice(-3).reverse().map((l) => `<li>${escapeHtml(l)}</li>`).join("");
