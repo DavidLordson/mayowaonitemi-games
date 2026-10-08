@@ -18,17 +18,23 @@ for (let g = 0; g < games; g++) {
     if (!ludo.play(s, other.pid, { type: "roll" }, rand).error) fail("ludo: played out of turn");
     let move = { type: "roll" };
     if (s.phase === "move") {
-      const die = pick(ludo.usableDice(s, p.color));
-      move = { type: "move", die, token: pick(ludo.movesFor(s, p.color, s.dice[die])) };
+      const die = pick(ludo.usableDice(s, p));
+      const color = pick(ludo.colorsOf(p).filter((c) => ludo.movesFor(s, c, s.dice[die]).length));
+      move = { type: "move", die, color, token: pick(ludo.movesFor(s, color, s.dice[die])) };
+      const theirs = ludo.colorsOf(other)[0];
+      if (!ludo.play(s, p.pid, { ...move, color: theirs }, rand).error) fail("ludo: moved someone else's token");
       if (!ludo.play(s, p.pid, { ...move, die: 1 - die }, rand).error && s.used[1 - die]) fail("ludo: reused a die");
     }
     const next = ludo.play(s, p.pid, move, rand);
     if (next.error) fail(`ludo error: ${next.error}`);
-    for (const pl of next.players) for (const pos of next.tokens[pl.color]) if (pos < -1 || pos > ludo.HOME) fail("ludo: bad position");
+    for (const pl of next.players) for (const c of ludo.colorsOf(pl)) for (const pos of next.tokens[c]) if (pos < -1 || pos > ludo.HOME) fail("ludo: bad position");
+    if (next.phase === "over" && !ludo.colorsOf(next.players.find((x) => x.pid === next.winner)).every((c) => next.tokens[c].every((t) => t === ludo.HOME))) fail("ludo: won early");
     s = next;
     ludoTurns++;
   }
 }
+const two = ludo.newGame(["a", "b"]);
+if (two.players[0].colors.join() !== "red,yellow" || two.players[1].colors.join() !== "green,blue") fail("ludo: 2-player houses wrong");
 console.log(`ludo: ${games} games finished ok (${Math.round(ludoTurns / games)} actions per game)`);
 
 // A 2 can be blocked with another 2, and the pick grows.

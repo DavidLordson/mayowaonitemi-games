@@ -139,7 +139,8 @@ export function mount(root, ctx) {
     const members = ctx.members();
     const current = g.players[g.turn];
     const myTurn = current.pid === me && g.phase !== "over";
-    const myColor = g.players.find((p) => p.pid === me)?.color;
+    const colorsOf = (p) => (p ? p.colors ?? [p.color] : []);
+    const myColors = colorsOf(g.players.find((p) => p.pid === me));
     const nameOf = (pid) => (pid === me ? "You" : members[pid]?.name || "Player");
 
     // Tokens
@@ -148,12 +149,14 @@ export function mount(root, ctx) {
     const stacks = new Map();
     const dice = Array.isArray(g.dice) ? g.dice : null;
     const used = g.used || [false, false];
-    const usable = myTurn && g.phase === "move" && dice ? [0, 1].filter((d) => !used[d] && movesFor(g, myColor, dice[d]).length) : [];
+    const canMoveWith = (color, token, d) => movesFor(g, color, dice[d]).includes(token);
+    const usable = myTurn && g.phase === "move" && dice
+      ? [0, 1].filter((d) => !used[d] && myColors.some((c) => movesFor(g, c, dice[d]).length))
+      : [];
     if (!usable.includes(selDie)) selDie = usable[0] ?? 0;
     // A token glows if either remaining die can move it; tapping uses the chosen die when it can.
-    const dieFor = (token) => [selDie, ...usable].find((d) => usable.includes(d) && movesFor(g, myColor, dice[d]).includes(token));
-    const movable = new Set(usable.flatMap((d) => movesFor(g, myColor, dice[d])));
-    for (const { color } of g.players) {
+    const dieFor = (color, token) => [selDie, ...usable].find((d) => usable.includes(d) && canMoveWith(color, token, d));
+    for (const color of g.players.flatMap(colorsOf)) {
       g.tokens[color].forEach((pos, i) => {
         const cell = cellFor(color, pos, i);
         const key = `${cell.r},${cell.c}`;
@@ -164,9 +167,9 @@ export function mount(root, ctx) {
         t.style.setProperty("--c", COLOR_HEX[color]);
         if (cell.span === 1) t.style.setProperty("--shift", n);
         place(t, cell.r, cell.c, cell.span);
-        if (color === myColor && movable.has(i)) {
+        if (myColors.includes(color) && dieFor(color, i) !== undefined) {
           t.classList.add("movable");
-          t.onclick = () => send({ type: "move", token: i, die: dieFor(i) });
+          t.onclick = () => send({ type: "move", color, token: i, die: dieFor(color, i) });
         } else t.disabled = true;
         if (g.last && g.last.color === color && g.last.token === i) t.classList.add("just-moved");
         board.appendChild(t);
@@ -176,9 +179,10 @@ export function mount(root, ctx) {
 
     // Players
     root.querySelector(".ludo-players").innerHTML = g.players.map((p, i) => {
-      const home = g.tokens[p.color].filter((x) => x === HOME).length;
-      return `<div class="ludo-player${i === g.turn && g.phase !== "over" ? " turn" : ""}" style="--c:${COLOR_HEX[p.color]}">
-        <i></i><span>${escapeHtml(nameOf(p.pid))}</span><small>${home}/4 home</small></div>`;
+      const cols = colorsOf(p);
+      const home = cols.reduce((n, c) => n + g.tokens[c].filter((x) => x === HOME).length, 0);
+      return `<div class="ludo-player${i === g.turn && g.phase !== "over" ? " turn" : ""}" style="--c:${COLOR_HEX[cols[0]]}">
+        ${cols.map((c) => `<i style="--c:${COLOR_HEX[c]}"></i>`).join("")}<span>${escapeHtml(nameOf(p.pid))}</span><small>${home}/${cols.length * 4} home</small></div>`;
     }).join("");
 
     // Dice + status
@@ -191,7 +195,7 @@ export function mount(root, ctx) {
       btn.classList.toggle("ready", canRoll);
       btn.classList.toggle("used", g.phase === "move" && !!used[d]);
       btn.classList.toggle("selected", usable.length > 1 && selDie === d);
-      btn.style.setProperty("--c", COLOR_HEX[current.color]);
+      btn.style.setProperty("--c", COLOR_HEX[colorsOf(current)[0]]);
     });
     const left = dice ? dice.filter((_, d) => !used[d]) : [];
     let status;

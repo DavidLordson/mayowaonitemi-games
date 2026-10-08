@@ -3,7 +3,7 @@
 Private game rooms for playing together on separate phones:
 
 - **Crossword** — fill in the grid together in real time (book puzzles or freshly generated ones).
-- **Ludo** — two dice: use each die on any token (split or combine), a 6 brings a token out, double 6 / a capture / getting home earns another roll, stars and start squares are safe, exact roll to get home.
+- **Ludo** — two players each play two opposite houses (first to join: red + yellow; second: green + blue; all 8 tokens home to win). Two dice: use each die on any token (split or combine), a 6 brings a token out, double 6 / a capture / getting home earns another roll, stars and start squares are safe, exact roll to get home.
 - **Whot** — Nigerian rules: 1 Hold on, 2 Pick two (block it with your own 2 — the pick stacks), 5 Pick three, 8 Suspension, 14 General market, 20 Whot (call a shape).
 
 Pick a game from **⋯ → New game**. Everyone in the room plays (up to 4).

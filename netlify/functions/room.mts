@@ -238,13 +238,13 @@ export default async (req: Request) => {
     const gameId = newGameId();
     let generated = current.data.generated ?? 0;
     if (ENGINES[game]) {
-      // Everyone in the room plays (up to 4), starting with whoever began the game.
-      const others = Object.entries(current.data.members)
-        .filter(([id]) => id !== pid)
+      // Everyone in the room plays (up to 4), in the order they joined — so seats stay
+      // the same game after game (in 2-player Ludo the room's first member is red + yellow).
+      const seated = Object.entries(current.data.members)
         .sort(([, a], [, b]) => a.joinedAt - b.joinedAt)
         .map(([id]) => id);
-      if (!others.length) return fail(400, "Invite someone to the room first — this game needs at least 2 players.");
-      await store().setJSON(gameKey(gameId), ENGINES[game].newGame([pid, ...others], rand));
+      if (seated.length < 2) return fail(400, "Invite someone to the room first — this game needs at least 2 players.");
+      await store().setJSON(gameKey(gameId), ENGINES[game].newGame(seated, rand));
     } else if (puzzleId === RANDOM_PUZZLE) {
       generated++;
       const puzzle = generatePuzzle(words, { id: `${RANDOM_PUZZLE}-${gameId}`, title: `Puzzle #${generated}` });
