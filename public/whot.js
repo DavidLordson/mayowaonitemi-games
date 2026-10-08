@@ -21,6 +21,7 @@ function cardHtml(card, extra = "") {
 }
 
 function canPlay(g, card) {
+  if (g.pending) return card.n === 2;
   if (card.n === 20) return true;
   if (g.request) return card.shape === g.request;
   return card.shape === g.top.shape || card.n === g.top.n;
@@ -109,7 +110,7 @@ export function mount(root, ctx) {
       pile.innerHTML = cardHtml(g.top, lastTopId === null ? "" : "landed");
       lastTopId = g.top.id;
     }
-    root.querySelector(".market-count").textContent = `Market · ${g.marketCount}`;
+    root.querySelector(".market-count").textContent = myTurn && g.pending ? `Tap to pick ${g.pending}` : `Market · ${g.marketCount}`;
     marketBtn.disabled = !myTurn || busy;
     marketBtn.classList.toggle("ready", myTurn && !busy);
 
@@ -123,11 +124,16 @@ export function mount(root, ctx) {
 
     let status;
     if (g.over) status = g.winner === me ? "You won! 🎉" : `${nameOf(g.winner)} won`;
+    else if (myTurn && g.pending) {
+      status = cards.some((c) => c.n === 2)
+        ? `Pick ${g.pending}! Block it with your 2, or tap the market to pick`
+        : `Pick ${g.pending} — no 2 to block, tap the market`;
+    } else if (g.pending) status = `${nameOf(current.pid)} must pick ${g.pending} or block with a 2`;
     else if (myTurn) {
       const playable = cards.some((c) => canPlay(g, c));
       status = playable ? "Your turn — play a highlighted card, or go to market" : "Your turn — nothing matches, go to market";
     } else status = `${nameOf(current.pid)}'s turn`;
-    const top = g.top.n !== 20 && SPECIAL[g.top.n] && !g.over ? ` · ${SPECIAL[g.top.n]}` : "";
+    const top = g.top.n !== 20 && SPECIAL[g.top.n] && !g.over && !g.pending ? ` · ${SPECIAL[g.top.n]}` : "";
     statusEl.textContent = note || status + top;
     root.querySelector(".game-log").innerHTML = g.log.slice(-3).reverse().map((l) => `<li>${escapeHtml(l)}</li>`).join("");
 

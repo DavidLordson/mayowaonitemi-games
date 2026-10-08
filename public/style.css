@@ -254,3 +254,6 @@ dialog .form { padding: 22px; min-width: 280px; text-align: center; }
 .shape-grid svg { width: 34px; height: 34px; fill: #7a1f2b; }
 dialog.shape-pick .form { min-width: 300px; }
 @media (min-width: 700px) { .wcard { --w: 88px; } }
+.dice-pair { display: flex; gap: 8px; }
+.dice.used { opacity: .3; }
+.dice.selected { box-shadow: 0 0 0 4px var(--c); }

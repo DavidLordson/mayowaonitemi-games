@@ -16,7 +16,12 @@ for (let g = 0; g < games; g++) {
     const p = s.players[s.turn];
     const other = s.players[(s.turn + 1) % s.players.length];
     if (!ludo.play(s, other.pid, { type: "roll" }, rand).error) fail("ludo: played out of turn");
-    const move = s.phase === "roll" ? { type: "roll" } : { type: "move", token: pick(ludo.movesFor(s, p.color, s.dice)) };
+    let move = { type: "roll" };
+    if (s.phase === "move") {
+      const die = pick(ludo.usableDice(s, p.color));
+      move = { type: "move", die, token: pick(ludo.movesFor(s, p.color, s.dice[die])) };
+      if (!ludo.play(s, p.pid, { ...move, die: 1 - die }, rand).error && s.used[1 - die]) fail("ludo: reused a die");
+    }
     const next = ludo.play(s, p.pid, move, rand);
     if (next.error) fail(`ludo error: ${next.error}`);
     for (const pl of next.players) for (const pos of next.tokens[pl.color]) if (pos < -1 || pos > ludo.HOME) fail("ludo: bad position");
@@ -25,6 +30,24 @@ for (let g = 0; g < games; g++) {
   }
 }
 console.log(`ludo: ${games} games finished ok (${Math.round(ludoTurns / games)} actions per game)`);
+
+// A 2 can be blocked with another 2, and the pick grows.
+{
+  const two = (id, shape) => ({ id, shape, n: 2 });
+  let s = whot.newGame(["a", "b"], rand);
+  s.players[0].hand = [two(100, "circle"), { id: 101, shape: "star", n: 7 }];
+  s.players[1].hand = [two(102, "square"), { id: 103, shape: "cross", n: 3 }];
+  s.pile = [{ id: 104, shape: "circle", n: 4 }];
+  s = whot.play(s, "a", { type: "play", card: 100 }, rand);
+  if (s.pending !== 2 || s.turn !== 1) fail("whot: pick two not pending on the next player");
+  if (!whot.play(s, "b", { type: "play", card: 103 }, rand).error) fail("whot: non-2 allowed while a pick is pending");
+  s = whot.play(s, "b", { type: "play", card: 102 }, rand);
+  if (s.pending !== 4 || s.turn !== 0) fail("whot: block didn't pass pick four back");
+  const before = s.players[0].hand.length;
+  s = whot.play(s, "a", { type: "market" }, rand);
+  if (s.players[0].hand.length !== before + 4 || s.pending !== 0 || s.turn !== 1) fail("whot: picking four went wrong");
+  console.log("whot: blocking a 2 with a 2 works");
+}
 
 let whotTurns = 0, stuck = 0;
 for (let g = 0; g < games; g++) {
