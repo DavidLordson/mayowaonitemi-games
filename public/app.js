@@ -7,15 +7,21 @@ const HEARTBEAT_MS = 10000;
 const ONLINE_MS = 20000;
 
 const $ = (id) => document.getElementById(id);
-const room = (new URLSearchParams(location.search).get("room") || "main").toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 40) || "main";
 
 const storage = {
   get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
 
-const me = storage.get("cw-player") || { id: Math.random().toString(36).slice(2, 12), name: "", color: COLORS[Math.floor(Math.random() * COLORS.length)] };
-storage.set("cw-player", me);
+// Logins on this device: room id -> { pid, token, roomName }.
+const rooms = storage.get("cw-rooms") || {};
+const saveRooms = () => storage.set("cw-rooms", rooms);
+// Name and colour suggested when creating or joining a room.
+const profile = storage.get("cw-profile") || { name: "", color: COLORS[Math.floor(Math.random() * COLORS.length)] };
+
+let session = null;       // { room, pid, token } for the room being played
+let members = {};         // pid -> { name, color }
+const me = () => members[session?.pid] || { name: "You", color: profile.color };
 
 let puzzle = null;        // built puzzle for the current game
 let meta = null;          // { gameId, puzzleId }
@@ -41,14 +47,13 @@ function letterAt(k) {
     if (e && (!best || e[1] > best.t)) best = { ch: e[0], t: e[1], by: pid };
   }
   const mine = myEdits[k];
-  if (mine && (mine.t == null || !best || best.t < mine.t)) return mine.ch ? { ch: mine.ch, by: me.id } : null;
+  if (mine && (mine.t == null || !best || best.t < mine.t)) return mine.ch ? { ch: mine.ch, by: session.pid } : null;
   if (mine && best && best.t >= mine.t) delete myEdits[k]; // server has caught up
   return best && best.ch ? best : null;
 }
 
 function colorOf(pid) {
-  if (pid === me.id) return me.color;
-  return players[pid]?.color || "#1f2433";
+  return members[pid]?.color || "#1f2433";
 }
 
 function setLetter(r, c, ch) {
@@ -61,18 +66,41 @@ function setLetter(r, c, ch) {
 
 // ---------- network ----------
 
-async function api(method, body) {
-  const res = await fetch(method === "GET" ? `/api/room?room=${room}` : "/api/room", {
+class ApiError extends Error {
+  constructor(status, message) { super(message); this.status = status; }
+}
+
+async function api(method, body, auth = true) {
+  const headers = {};
+  if (body) headers["content-type"] = "application/json";
+  if (auth && session) headers.authorization = `Bearer ${session.token}`;
+  const res = await fetch(method === "GET" ? `/api/room?room=${session.room}` : "/api/room", {
     method,
-    headers: body ? { "content-type": "application/json" } : undefined,
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+// The room no longer accepts this device (logged out elsewhere, or room gone).
+function lostAccess(err) {
+  if (!(err instanceof ApiError) || (err.status !== 403 && err.status !== 404)) return false;
+  delete rooms[session.room];
+  saveRooms();
+  showHome("You're no longer logged in to that room. Ask for a new invite link.");
+  return true;
 }
 
 async function applyState(state) {
+  if (!session || state.room !== session.room) return;
   lastServerSkew = state.now - Date.now();
+  members = state.members;
+  if (rooms[session.room] && rooms[session.room].roomName !== state.roomName) {
+    rooms[session.room].roomName = state.roomName;
+    saveRooms();
+  }
   if (!meta || state.meta.gameId !== meta.gameId) {
     const data = await fetch(`/puzzles/${state.meta.puzzleId}.json`).then((r) => r.json());
     meta = state.meta;
@@ -81,7 +109,7 @@ async function applyState(state) {
     wrong.clear();
     solvedShown = false;
     $("banner").hidden = true;
-    setupPuzzle(buildPuzzle(data));
+    setupPuzzle(buildPuzzle(data), state.roomName);
   }
   players = state.players;
   render();
@@ -90,15 +118,17 @@ async function applyState(state) {
 let pollTimer = null;
 async function poll() {
   clearTimeout(pollTimer);
+  if (!session) return;
   try {
     await applyState(await api("GET"));
     setStatus("");
-  } catch {
+  } catch (err) {
+    if (lostAccess(err)) return;
     setStatus("Reconnecting…");
   }
-  pollTimer = setTimeout(poll, document.hidden ? HIDDEN_POLL_MS : POLL_MS);
+  if (session) pollTimer = setTimeout(poll, document.hidden ? HIDDEN_POLL_MS : POLL_MS);
 }
-document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && session) poll(); });
 
 let flushTimer = null;
 function flushSoon() {
@@ -107,7 +137,7 @@ function flushSoon() {
 }
 
 async function flush() {
-  if (sending || !meta) return;
+  if (sending || !meta || !session) return;
   const cells = outbox;
   if (!Object.keys(cells).length && !cursorDirty) return;
   outbox = {};
@@ -116,13 +146,14 @@ async function flush() {
   lastSent = Date.now();
   const gameId = meta.gameId;
   try {
-    const res = await api("POST", { action: "edit", room, gameId, player: me, cells, cursor: sel });
+    const res = await api("POST", { action: "edit", room: session.room, gameId, cells, cursor: sel });
     for (const k of Object.keys(cells)) {
       // Mark as acknowledged unless the letter was changed again while in flight.
       if (myEdits[k] && myEdits[k].t == null && !(k in outbox)) myEdits[k].t = res.t;
     }
     await applyState(res);
-  } catch {
+  } catch (err) {
+    if (lostAccess(err)) { sending = false; return; }
     if (meta && meta.gameId === gameId) outbox = { ...cells, ...outbox };
     cursorDirty = true;
     setStatus("Couldn't save — retrying…");
@@ -134,15 +165,15 @@ async function flush() {
 }
 
 setInterval(() => {
-  if (!document.hidden && Date.now() - lastSent > HEARTBEAT_MS) { cursorDirty = true; flush(); }
+  if (session && !document.hidden && Date.now() - lastSent > HEARTBEAT_MS) { cursorDirty = true; flush(); }
 }, 2000);
 
 // ---------- puzzle / navigation ----------
 
 let cellEls = [];
-function setupPuzzle(p) {
+function setupPuzzle(p, roomName) {
   puzzle = p;
-  $("title").textContent = p.title;
+  $("title").textContent = `${roomName} · ${p.title}`;
   const grid = $("grid");
   grid.style.setProperty("--cols", p.width);
   grid.innerHTML = "";
@@ -256,7 +287,9 @@ function render() {
   const word = currentWord();
   const inWord = new Set(word ? word.cells.map(([r, c]) => key(r, c)) : []);
   const now = Date.now() + lastServerSkew;
-  const partners = Object.entries(players).filter(([pid, p]) => pid !== me.id && p.cursor && now - p.seen < ONLINE_MS);
+  const partners = Object.entries(players)
+    .filter(([pid, p]) => pid !== session.pid && p.cursor && now - p.seen < ONLINE_MS)
+    .map(([pid, p]) => [pid, { ...p, color: colorOf(pid) }]);
   const partnerCells = new Map();
   const partnerWords = new Map();
   for (const [, p] of partners) {
@@ -300,19 +333,17 @@ function render() {
 }
 
 function renderPlayers(now) {
-  const list = Object.entries(players).filter(([pid]) => pid !== me.id);
   const box = $("players");
   box.innerHTML = "";
-  const add = (name, color, away) => {
+  for (const [pid, m] of Object.entries(members)) {
+    const seen = pid === session.pid ? now : players[pid]?.seen || 0;
     const s = document.createElement("span");
-    s.className = `player${away ? " away" : ""}`;
-    s.style.setProperty("--c", color);
+    s.className = `player${now - seen > ONLINE_MS ? " away" : ""}`;
+    s.style.setProperty("--c", m.color);
     s.innerHTML = "<i></i>";
-    s.append(name || "Player");
+    s.append(pid === session.pid ? `${m.name} (you)` : m.name);
     box.appendChild(s);
-  };
-  add(me.name || "You", me.color, false);
-  for (const [, p] of list) add(p.name, p.color, now - p.seen > ONLINE_MS);
+  }
 }
 
 let statusMsg = "";
@@ -346,7 +377,7 @@ function buildKeyboard() {
 }
 
 document.addEventListener("keydown", (e) => {
-  if (!puzzle || $("nameDialog").open || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (!puzzle || !session || document.querySelector("dialog[open]") || e.metaKey || e.ctrlKey || e.altKey) return;
   if (/^[a-z]$/i.test(e.key)) typeLetter(e.key.toUpperCase());
   else if (e.key === "Backspace" || e.key === "Delete") backspace();
   else if (e.key === "ArrowLeft") moveArrow(0, -1);
@@ -365,9 +396,10 @@ $("clueText").onclick = () => { toggleDir(); moved(); };
 
 $("menuBtn").onclick = (e) => { e.stopPropagation(); $("menu").hidden = !$("menu").hidden; };
 document.addEventListener("click", () => { $("menu").hidden = true; });
+$("homeBtn").onclick = () => showHome();
 $("menu").onclick = async (e) => {
   const act = e.target.dataset.act;
-  if (!act || !puzzle) return;
+  if (!act || !puzzle || !session) return;
   if (act === "check") {
     wrong = new Set();
     for (let r = 0; r < puzzle.height; r++) for (let c = 0; c < puzzle.width; c++) {
@@ -380,52 +412,215 @@ $("menu").onclick = async (e) => {
   } else if (act === "reveal") {
     setLetter(sel.r, sel.c, puzzle.grid[sel.r][sel.c]);
     moved();
-  } else if (act === "share") {
-    const link = `${location.origin}/?room=${room}`;
-    try { await navigator.clipboard.writeText(link); setStatus("Invite link copied"); }
-    catch { prompt("Send this link:", link); }
-    setTimeout(() => setStatus(""), 2500);
+  } else if (act === "invite" || act === "device") {
+    makeLink(act === "invite" ? "member" : "device");
   } else if (act === "name") {
     askName();
   } else if (act === "new") {
     newGame();
+  } else if (act === "logout") {
+    if (!confirm("Log out of this room on this device? You'll need a new link to get back in.")) return;
+    try { await api("POST", { action: "logout", room: session.room }); } catch {}
+    delete rooms[session.room];
+    saveRooms();
+    showHome();
   }
 };
 
+async function makeLink(kind) {
+  try {
+    const { code } = await api("POST", { action: "invite", room: session.room, kind });
+    const link = `${location.origin}/?room=${session.room}&invite=${code}`;
+    $("linkTitle").textContent = kind === "member" ? "Invite someone" : "Log in on another device";
+    $("linkText").textContent = kind === "member"
+      ? "Send this link to the person you want to play with. It works once and expires in 7 days."
+      : `Open this link on your other device to play there as ${me().name}. It works once and expires in 30 minutes.`;
+    $("linkInput").value = link;
+    $("linkShare").hidden = !navigator.share;
+    $("linkShare").onclick = () => navigator.share({ title: "Crossword", text: kind === "member" ? "Come do the crossword with me" : undefined, url: link }).catch(() => {});
+    $("linkCopy").textContent = "Copy link";
+    $("linkCopy").onclick = async () => {
+      try { await navigator.clipboard.writeText(link); } catch { $("linkInput").select(); document.execCommand("copy"); }
+      $("linkCopy").textContent = "Copied ✓";
+    };
+    $("linkDialog").showModal();
+  } catch (err) {
+    if (!lostAccess(err)) setStatus("Couldn't make a link — try again");
+  }
+}
+
 async function newGame() {
-  if (!confirm("Start a new game? This clears the board for both of you.")) return;
+  if (!confirm("Start a new game? This clears the board for everyone in the room.")) return;
   const list = await fetch("/puzzles/index.json").then((r) => r.json());
   const others = list.filter((p) => p.id !== meta.puzzleId);
-  const pick = (others.length ? others : list)[Math.floor(Math.random() * (others.length || list.length))];
-  try { await applyState(await api("POST", { action: "new", room, puzzleId: pick.id, fromGameId: meta.gameId })); }
-  catch { setStatus("Couldn't start a new game"); }
+  const pool = others.length ? others : list;
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  try { await applyState(await api("POST", { action: "new", room: session.room, puzzleId: pick.id, fromGameId: meta.gameId })); }
+  catch (err) { if (!lostAccess(err)) setStatus("Couldn't start a new game"); }
 }
 $("bannerNew").onclick = newGame;
 $("bannerClose").onclick = () => { $("banner").hidden = true; };
 
-function askName() {
-  const dlg = $("nameDialog");
-  $("nameInput").value = me.name;
-  const pick = $("colorPick");
-  pick.innerHTML = "";
-  let chosen = me.color;
+// Colour swatches inside a container; returns a getter for the chosen colour.
+function colorPicker(box, initial) {
+  let chosen = initial;
+  box.innerHTML = "";
   for (const color of COLORS) {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "swatch" + (color === chosen ? " on" : "");
     b.style.setProperty("--c", color);
-    b.onclick = () => { chosen = color; pick.querySelectorAll(".swatch").forEach((s) => s.classList.toggle("on", s === b)); };
-    pick.appendChild(b);
+    b.setAttribute("aria-label", `Colour ${color}`);
+    b.onclick = () => { chosen = color; box.querySelectorAll(".swatch").forEach((s) => s.classList.toggle("on", s === b)); };
+    box.appendChild(b);
   }
-  dlg.onclose = () => {
-    me.name = $("nameInput").value.trim().slice(0, 24) || me.name || "Player";
-    me.color = chosen;
-    storage.set("cw-player", me);
-    moved();
+  return () => chosen;
+}
+
+function rememberProfile(name, color) {
+  profile.name = name;
+  profile.color = color;
+  storage.set("cw-profile", profile);
+}
+
+function askName() {
+  const dlg = $("nameDialog");
+  $("nameInput").value = me().name;
+  const getColor = colorPicker($("colorPick"), me().color);
+  dlg.onclose = async () => {
+    const name = $("nameInput").value.trim().slice(0, 24) || me().name;
+    rememberProfile(name, getColor());
+    try { await applyState(await api("POST", { action: "profile", room: session.room, name, color: getColor() })); }
+    catch (err) { if (!lostAccess(err)) setStatus("Couldn't save your name"); }
   };
   dlg.showModal();
 }
 
+// ---------- screens ----------
+
+function showScreen(id) {
+  for (const s of ["homeScreen", "joinScreen", "gameScreen"]) $(s).hidden = s !== id;
+  const inGame = id === "gameScreen";
+  $("menuBtn").hidden = !inGame;
+  $("homeBtn").hidden = !inGame;
+  if (!inGame) {
+    $("players").innerHTML = "";
+    $("title").textContent = "Crossword Together";
+  }
+}
+
+function showHome(notice) {
+  session = null;
+  clearTimeout(pollTimer);
+  history.replaceState(null, "", "/");
+  showScreen("homeScreen");
+  $("homeNotice").hidden = !notice;
+  $("homeNotice").textContent = notice || "";
+  const list = $("roomList");
+  list.innerHTML = "";
+  for (const [room, info] of Object.entries(rooms)) {
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+    a.href = `/?room=${room}`;
+    a.textContent = info.roomName || "Room";
+    const span = document.createElement("span");
+    span.textContent = "Play ›";
+    a.appendChild(span);
+    a.onclick = (e) => { e.preventDefault(); enterRoom(room); };
+    li.appendChild(a);
+    list.appendChild(li);
+  }
+  $("noRooms").hidden = Object.keys(rooms).length > 0;
+}
+
+const createForm = $("createForm");
+let createColor = colorPicker(createForm.querySelector("[data-colors]"), profile.color);
+createForm.elements.name.value = profile.name;
+createForm.onsubmit = async (e) => {
+  e.preventDefault();
+  const btn = createForm.querySelector("button.primary");
+  btn.disabled = true;
+  try {
+    const name = createForm.elements.name.value.trim();
+    rememberProfile(name, createColor());
+    const res = await api("POST", { action: "create", roomName: createForm.elements.roomName.value.trim(), name, color: createColor() }, false);
+    rooms[res.room] = { pid: res.pid, token: res.token, roomName: res.roomName };
+    saveRooms();
+    enterRoom(res.room);
+  } catch (err) {
+    alert(`Couldn't create the room: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+async function showJoin(room, invite) {
+  showScreen(null); // stay blank until the invite is checked
+  let info;
+  try {
+    info = await fetch("/api/room", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "inviteInfo", room, invite }),
+    }).then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d.error); return d; });
+  } catch (err) {
+    showHome(rooms[room] ? "That link was already used — but you're already in this room below." : (err.message || "That invite link doesn't work."));
+    return;
+  }
+  const form = $("joinForm");
+  showScreen("joinScreen");
+  const isDevice = info.kind === "device";
+  $("joinTitle").textContent = isDevice ? `Log in as ${info.playerName}` : `Join “${info.roomName}”`;
+  $("joinText").textContent = isDevice
+    ? `This device will play in “${info.roomName}” as ${info.playerName}.`
+    : `${info.members.join(" & ")} invited you to do the crossword together.`;
+  $("joinFields").hidden = isDevice;
+  $("joinBtn").textContent = isDevice ? "Log in" : "Join";
+  form.elements.name.value = profile.name;
+  form.elements.name.required = !isDevice;
+  const getColor = colorPicker(form.querySelector("[data-colors]"), profile.color);
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    $("joinBtn").disabled = true;
+    try {
+      const name = form.elements.name.value.trim();
+      if (!isDevice) rememberProfile(name, getColor());
+      const res = await api("POST", { action: "join", room, invite, name, color: getColor() }, false);
+      rooms[room] = { pid: res.pid, token: res.token, roomName: res.roomName };
+      saveRooms();
+      enterRoom(room);
+    } catch (err) {
+      showHome(err.message);
+    } finally {
+      $("joinBtn").disabled = false;
+    }
+  };
+}
+
+function enterRoom(room) {
+  const creds = rooms[room];
+  if (!creds) {
+    showHome("This room is private. Ask someone in it to send you an invite link.");
+    return;
+  }
+  session = { room, pid: creds.pid, token: creds.token };
+  meta = null;
+  puzzle = null;
+  members = {};
+  players = {};
+  history.replaceState(null, "", `/?room=${room}`);
+  showScreen("gameScreen");
+  $("grid").innerHTML = "";
+  setStatus("Loading…");
+  poll();
+}
+
 buildKeyboard();
-poll();
-if (!me.name) askName();
+{
+  const params = new URLSearchParams(location.search);
+  const room = (params.get("room") || "").toLowerCase();
+  const invite = params.get("invite");
+  if (room && invite) showJoin(room, invite);
+  else if (room) enterRoom(room);
+  else showHome();
+}

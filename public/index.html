@@ -9,54 +9,102 @@
 </head>
 <body>
   <header class="topbar">
-    <h1 id="title">Crossword</h1>
+    <button id="homeBtn" class="icon-btn" aria-label="Home" hidden>⌂</button>
+    <h1 id="title">Crossword Together</h1>
     <div id="players" class="players"></div>
-    <button id="menuBtn" class="icon-btn" aria-label="Menu">⋯</button>
+    <button id="menuBtn" class="icon-btn" aria-label="Menu" hidden>⋯</button>
   </header>
 
   <div id="menu" class="menu" hidden>
+    <button data-act="invite">Invite someone</button>
+    <button data-act="device">Log in on another device</button>
     <button data-act="check">Check puzzle</button>
     <button data-act="reveal">Reveal letter</button>
-    <button data-act="share">Copy invite link</button>
     <button data-act="name">Change name / colour</button>
     <button data-act="new">New game</button>
+    <button data-act="logout">Log out of this room</button>
   </div>
 
-  <main class="layout">
-    <section class="board">
-      <div id="grid" class="grid"></div>
-      <div id="status" class="status"></div>
-    </section>
-    <section class="clues">
-      <div><h2>Across</h2><ol id="across"></ol></div>
-      <div><h2>Down</h2><ol id="down"></ol></div>
-    </section>
-  </main>
-
-  <footer class="dock">
-    <div class="cluebar">
-      <button id="prevClue" class="icon-btn" aria-label="Previous clue">‹</button>
-      <div id="clueText" class="clue-text"></div>
-      <button id="nextClue" class="icon-btn" aria-label="Next clue">›</button>
+  <!-- Home: your rooms + create a room -->
+  <section id="homeScreen" class="screen" hidden>
+    <p id="homeNotice" class="notice" hidden></p>
+    <div class="card">
+      <h2>Your rooms</h2>
+      <ul id="roomList" class="room-list"></ul>
+      <p id="noRooms" class="muted">No rooms on this device yet. Create one, or open an invite link someone sent you.</p>
     </div>
-    <div id="keyboard" class="keyboard"></div>
-  </footer>
+    <form id="createForm" class="card form">
+      <h2>Create a private room</h2>
+      <label>Room name<input name="roomName" maxlength="24" placeholder="e.g. Us two"></label>
+      <label>Your name<input name="name" maxlength="24" required autocomplete="off"></label>
+      <div class="colors" data-colors></div>
+      <button class="primary">Create room</button>
+      <p class="muted">Only people you send an invite link to can join.</p>
+    </form>
+  </section>
+
+  <!-- Accepting an invite -->
+  <section id="joinScreen" class="screen" hidden>
+    <form id="joinForm" class="card form">
+      <h2 id="joinTitle"></h2>
+      <p id="joinText" class="muted"></p>
+      <div id="joinFields">
+        <label>Your name<input name="name" maxlength="24" autocomplete="off"></label>
+        <div class="colors" data-colors></div>
+      </div>
+      <button class="primary" id="joinBtn">Join</button>
+    </form>
+  </section>
+
+  <!-- The game -->
+  <div id="gameScreen" hidden>
+    <main class="layout">
+      <section class="board">
+        <div id="grid" class="grid"></div>
+        <div id="status" class="status"></div>
+      </section>
+      <section class="clues">
+        <div><h2>Across</h2><ol id="across"></ol></div>
+        <div><h2>Down</h2><ol id="down"></ol></div>
+      </section>
+    </main>
+
+    <footer class="dock">
+      <div class="cluebar">
+        <button id="prevClue" class="icon-btn" aria-label="Previous clue">‹</button>
+        <div id="clueText" class="clue-text"></div>
+        <button id="nextClue" class="icon-btn" aria-label="Next clue">›</button>
+      </div>
+      <div id="keyboard" class="keyboard"></div>
+    </footer>
+  </div>
 
   <div id="banner" class="banner" hidden>
     <div class="banner-card">
       <p class="banner-title">Solved! 🎉</p>
-      <p>You two finished the puzzle together.</p>
+      <p>You finished the puzzle together.</p>
       <button id="bannerNew" class="primary">New game</button>
       <button id="bannerClose">Keep looking</button>
     </div>
   </div>
 
   <dialog id="nameDialog">
-    <form method="dialog" class="name-form">
-      <p class="banner-title">Who's playing?</p>
+    <form method="dialog" class="form">
+      <p class="banner-title">Your name &amp; colour</p>
       <input id="nameInput" maxlength="24" placeholder="Your name" autocomplete="off" required>
       <div id="colorPick" class="colors"></div>
-      <button class="primary" value="ok">Start</button>
+      <button class="primary" value="ok">Save</button>
+    </form>
+  </dialog>
+
+  <dialog id="linkDialog">
+    <form method="dialog" class="form">
+      <p id="linkTitle" class="banner-title"></p>
+      <p id="linkText" class="muted"></p>
+      <input id="linkInput" readonly>
+      <button type="button" id="linkShare" class="primary">Share…</button>
+      <button type="button" id="linkCopy">Copy link</button>
+      <button value="close">Done</button>
     </form>
   </dialog>
 
