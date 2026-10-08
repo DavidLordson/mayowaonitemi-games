@@ -157,9 +157,12 @@ dialog .form { padding: 22px; min-width: 280px; text-align: center; }
 .game-over button { padding: 10px 14px; border-radius: 8px; cursor: pointer; font-size: 16px; }
 
 /* ---------- Ludo ---------- */
-.ludo { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; align-items: flex-start; }
+.ludo { --size: min(calc(100vw - 16px), 540px); display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; align-items: flex-start; }
+.ludo-3d { display: none; width: var(--size); height: calc(var(--size) * .9); touch-action: manipulation; }
+.ludo-3d canvas { display: block; }
+.ludo.is-3d .ludo-3d { display: block; }
+.ludo.is-3d .ludo-board, .ludo.is-3d .dice-pair { display: none; }
 .ludo-board {
-  --size: min(calc(100vw - 16px), 540px);
   width: var(--size); height: var(--size);
   display: grid; grid-template-columns: repeat(15, 1fr); grid-template-rows: repeat(15, 1fr);
   background: #fff; border: 2px solid var(--ink); border-radius: 6px; overflow: hidden; position: relative;

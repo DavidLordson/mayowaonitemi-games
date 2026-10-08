@@ -16,6 +16,9 @@ HOW IT WORKS
   links (30 min, same player). Opening a room shows a lobby (Continue / pick a game).
 - Game rules run on the server: lib/games/ludo.mjs, lib/games/whot.mjs.
   Crossword generator: lib/generator.mjs + lib/words.mjs (~426 words).
+- Ludo is 3D: public/ludo3d.js draws public/models/ludo_set.glb (made in Blender) with
+  three.js r169 vendored in public/vendor/three (import map in index.html). Falls back
+  to the flat CSS board if 3D fails.
 
 HOUSE RULES
 - Ludo: two dice, each die used once on any token; 6 brings a token out; double 6 /

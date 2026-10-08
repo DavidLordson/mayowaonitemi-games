@@ -1,4 +1,5 @@
 // Ludo board UI. The server runs the rules; this draws the state and sends rolls / moves.
+// The board is 3D (ludo3d.js) once it loads; the flat CSS board shows until then, or if 3D fails.
 
 const COLOR_HEX = { red: "#e5484d", green: "#16a34a", yellow: "#eab308", blue: "#3b82f6" };
 const START = { red: 0, green: 13, yellow: 26, blue: 39 };
@@ -50,6 +51,7 @@ const place = (el, r, c, rs = 1, cs = rs) => {
 export function mount(root, ctx) {
   root.innerHTML = `
     <div class="ludo">
+      <div class="ludo-3d"></div>
       <div class="ludo-board"></div>
       <div class="ludo-side">
         <div class="ludo-players"></div>
@@ -75,6 +77,9 @@ export function mount(root, ctx) {
   let busy = false;
   let lastSeq = -1;
   let note = "";
+  let view3d = null;
+  const tokenActions = new Map(); // "red2" -> send that token's move
+  let dieTappable = [false, false];
 
   // Static board.
   for (const [color, [r, c]] of Object.entries(YARD)) {
@@ -108,13 +113,27 @@ export function mount(root, ctx) {
   place(center, 6, 6, 3);
   board.appendChild(center);
 
-  diceBtns.forEach((btn, i) => {
-    btn.onclick = () => {
-      if (!game) return;
-      if (game.phase === "roll") send({ type: "roll" });
-      else { selDie = i; update(game); }
-    };
-  });
+  function tapDie(i) {
+    if (!game || !dieTappable[i]) return;
+    if (game.phase === "roll") send({ type: "roll" });
+    else { selDie = i; update(game); }
+  }
+  diceBtns.forEach((btn, i) => { btn.onclick = () => tapDie(i); });
+
+  import("./ludo3d.js")
+    .then(({ createBoard3D }) => createBoard3D(root.querySelector(".ludo-3d"), {
+      onToken: (color, i) => tokenActions.get(color + i)?.(),
+      onDie: tapDie,
+    }))
+    .then((view) => {
+      if (!view) return;
+      view3d = view;
+      root.querySelector(".ludo").classList.add("is-3d");
+      tokenLayer.forEach((t) => t.remove());
+      tokenLayer.length = 0;
+      if (game) update(game);
+    })
+    .catch((err) => console.warn("3D board unavailable, using the flat board", err));
   root.querySelector(".game-over button").onclick = () => ctx.newGame();
 
   async function send(move) {
@@ -143,10 +162,6 @@ export function mount(root, ctx) {
     const myColors = colorsOf(g.players.find((p) => p.pid === me));
     const nameOf = (pid) => (pid === me ? "You" : members[pid]?.name || "Player");
 
-    // Tokens
-    tokenLayer.forEach((t) => t.remove());
-    tokenLayer.length = 0;
-    const stacks = new Map();
     const dice = Array.isArray(g.dice) ? g.dice : null;
     const used = g.used || [false, false];
     const canMoveWith = (color, token, d) => movesFor(g, color, dice[d]).includes(token);
@@ -156,25 +171,55 @@ export function mount(root, ctx) {
     if (!usable.includes(selDie)) selDie = usable[0] ?? 0;
     // A token glows if either remaining die can move it; tapping uses the chosen die when it can.
     const dieFor = (color, token) => [selDie, ...usable].find((d) => usable.includes(d) && canMoveWith(color, token, d));
-    for (const color of g.players.flatMap(colorsOf)) {
+    const justRolled = g.seq !== lastSeq && dice && lastSeq !== -1 && g.phase !== "over" && !g.last;
+    lastSeq = g.seq;
+    const canRoll = myTurn && g.phase === "roll" && !busy;
+    dieTappable = [0, 1].map((d) => !busy && (canRoll || usable.includes(d)));
+
+    // Tokens
+    const colors = g.players.flatMap(colorsOf);
+    const stacks = new Map();
+    const pieces = [];
+    tokenActions.clear();
+    for (const color of colors) {
       g.tokens[color].forEach((pos, i) => {
         const cell = cellFor(color, pos, i);
         const key = `${cell.r},${cell.c}`;
         const n = stacks.get(key) ?? 0;
         stacks.set(key, n + 1);
+        const movable = myColors.includes(color) && dieFor(color, i) !== undefined;
+        if (movable) tokenActions.set(color + i, () => send({ type: "move", color, token: i, die: dieFor(color, i) }));
+        const justMoved = !!g.last && g.last.color === color && g.last.token === i;
+        pieces.push({ color, token: i, cell, n: cell.span === 1 ? n : 0, home: pos === HOME, movable, justMoved });
+      });
+    }
+    if (view3d) {
+      view3d.sync({
+        colors, pieces, dice,
+        rolled: !!justRolled,
+        canRoll,
+        tappable: dieTappable,
+        used: [0, 1].map((d) => g.phase === "move" && !!used[d]),
+        selected: [0, 1].map((d) => usable.length > 1 && selDie === d),
+        turnHex: COLOR_HEX[colorsOf(current)[0]],
+      });
+    } else {
+      tokenLayer.forEach((t) => t.remove());
+      tokenLayer.length = 0;
+      for (const p of pieces) {
         const t = document.createElement("button");
         t.className = "ludo-token";
-        t.style.setProperty("--c", COLOR_HEX[color]);
-        if (cell.span === 1) t.style.setProperty("--shift", n);
-        place(t, cell.r, cell.c, cell.span);
-        if (myColors.includes(color) && dieFor(color, i) !== undefined) {
+        t.style.setProperty("--c", COLOR_HEX[p.color]);
+        t.style.setProperty("--shift", p.n);
+        place(t, p.cell.r, p.cell.c, p.cell.span);
+        if (p.movable) {
           t.classList.add("movable");
-          t.onclick = () => send({ type: "move", color, token: i, die: dieFor(color, i) });
+          t.onclick = tokenActions.get(p.color + p.token);
         } else t.disabled = true;
-        if (g.last && g.last.color === color && g.last.token === i) t.classList.add("just-moved");
+        if (p.justMoved) t.classList.add("just-moved");
         board.appendChild(t);
         tokenLayer.push(t);
-      });
+      }
     }
 
     // Players
@@ -186,12 +231,9 @@ export function mount(root, ctx) {
     }).join("");
 
     // Dice + status
-    const justRolled = g.seq !== lastSeq && dice && lastSeq !== -1 && g.phase !== "over" && !g.last;
-    lastSeq = g.seq;
-    const canRoll = myTurn && g.phase === "roll" && !busy;
     diceBtns.forEach((btn, d) => {
       drawDie(btn, dice?.[d], justRolled);
-      btn.disabled = !(canRoll || usable.includes(d)) || busy;
+      btn.disabled = !dieTappable[d];
       btn.classList.toggle("ready", canRoll);
       btn.classList.toggle("used", g.phase === "move" && !!used[d]);
       btn.classList.toggle("selected", usable.length > 1 && selDie === d);
