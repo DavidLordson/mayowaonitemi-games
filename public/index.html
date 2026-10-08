@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#1f2433">
-  <title>Crossword Together</title>
+  <title>Games Together</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="topbar">
     <button id="homeBtn" class="icon-btn" aria-label="Home" hidden>⌂</button>
-    <h1 id="title">Crossword Together</h1>
+    <h1 id="title">Games Together</h1>
     <div id="players" class="players"></div>
     <button id="menuBtn" class="icon-btn" aria-label="Menu" hidden>⋯</button>
   </header>
@@ -21,7 +21,7 @@
     <button data-act="check" data-cw>Check puzzle</button>
     <button data-act="reveal" data-cw>Reveal letter</button>
     <button data-act="name">Change name / colour</button>
-    <button data-act="new">New game</button>
+    <button data-act="new">Games</button>
     <button data-act="logout">Log out of this room</button>
   </div>
 
@@ -58,6 +58,25 @@
 
   <!-- The game -->
   <div id="gameScreen" hidden>
+    <!-- Room lobby: continue the current game or start another -->
+    <section id="lobbyView" class="screen lobby" hidden>
+      <div id="lobbyNow" class="card now-playing" hidden>
+        <div><small class="muted">In progress</small><b id="lobbyNowName"></b></div>
+        <button type="button" id="lobbyContinue" class="primary">Continue ›</button>
+      </div>
+      <h2 class="lobby-h">Pick a game</h2>
+      <div class="lobby-games">
+        <button type="button" class="game-card" data-start="ludo"><span class="game-icon">🎲</span><b>Ludo</b><small>Two dice · two houses each</small></button>
+        <button type="button" class="game-card" data-start="whot"><span class="game-icon">🃏</span><b>Whot</b><small>Nigerian rules</small></button>
+        <button type="button" class="game-card" data-start="crossword"><span class="game-icon">✏️</span><b>Crossword</b><small>New random puzzle</small></button>
+      </div>
+      <div id="lobbyBooksWrap" hidden>
+        <p class="muted">Crossword from the book</p>
+        <div id="lobbyBooks" class="book-list"></div>
+      </div>
+      <p class="muted">Starting a game ends the one in progress for everyone in the room.</p>
+      <button type="button" id="allRooms" class="link-btn">← All my rooms</button>
+    </section>
     <div id="boardView" class="board-view" hidden></div>
     <div id="crosswordView">
     <main class="layout">
@@ -100,20 +119,6 @@
     </form>
   </dialog>
 
-  <dialog id="newDialog">
-    <form method="dialog" class="form">
-      <p class="banner-title">New game</p>
-      <p class="muted">This ends the current game for everyone in the room.</p>
-      <div class="game-pick">
-        <button type="button" data-game="ludo"><span class="game-icon">🎲</span>Ludo</button>
-        <button type="button" data-game="whot"><span class="game-icon">🃏</span>Whot</button>
-      </div>
-      <p class="muted">Crossword</p>
-      <button type="button" id="newRandom" class="primary">✏️ New random crossword</button>
-      <div id="bookList" class="book-list"></div>
-      <button value="cancel">Cancel</button>
-    </form>
-  </dialog>
 
   <dialog id="linkDialog">
     <form method="dialog" class="form">

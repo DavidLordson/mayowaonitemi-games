@@ -113,6 +113,7 @@ async function loadPuzzle(m) {
 
 async function applyState(state) {
   if (!session || state.room !== session.room) return;
+  if (meta && state.meta.startedAt < meta.startedAt) return; // a response from before the latest game began
   lastServerSkew = state.now - Date.now();
   members = state.members;
   if (rooms[session.room] && rooms[session.room].roomName !== state.roomName) {
@@ -120,6 +121,17 @@ async function applyState(state) {
     saveRooms();
   }
   const type = state.meta.game || "crossword";
+  if (type === "lobby" && !inLobby) showLobby(); // new room: nothing chosen yet
+  // Someone started a new game while we were in the lobby: join it.
+  if (inLobby && lobbySeenGame && state.meta.gameId !== lobbySeenGame && type !== "lobby") leaveLobby();
+  if (inLobby) {
+    lobbySeenGame ??= state.meta.gameId;
+    lobbyState = state;
+    players = state.players;
+    renderLobby(state);
+    renderPlayers(Date.now() + lastServerSkew);
+    return;
+  }
   if (BOARD_GAMES[type]) {
     if (!meta || state.meta.gameId !== meta.gameId || !boardGame) {
       meta = state.meta;
@@ -152,6 +164,59 @@ async function applyState(state) {
   players = state.players;
   render();
 }
+
+// ---------- lobby ----------
+
+const GAME_NAMES = { crossword: "Crossword", ludo: "Ludo", whot: "Whot" };
+let inLobby = false;
+let lobbyState = null; // latest room state seen while in the lobby
+let lobbySeenGame = null; // the game that was on when we opened the lobby
+
+function showLobby() {
+  inLobby = true;
+  lobbySeenGame = null;
+  if (boardGame) showCrossword(); // unmount the board view
+  meta = null; // re-load whichever game is picked
+  puzzle = null;
+  $("banner").hidden = true;
+  $("crosswordView").hidden = true;
+  $("boardView").hidden = true;
+  $("lobbyView").hidden = false;
+  document.querySelectorAll("[data-cw]").forEach((el) => { el.hidden = true; });
+  $("title").textContent = rooms[session.room]?.roomName || "Games";
+  if (lobbyState?.room === session.room) renderLobby(lobbyState);
+  fetch("/puzzles/index.json").then((r) => r.json()).then((list) => {
+    $("lobbyBooks").innerHTML = "";
+    for (const p of list) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = p.title;
+      b.onclick = () => startGame({ game: "crossword", puzzleId: p.id });
+      $("lobbyBooks").appendChild(b);
+    }
+    $("lobbyBooksWrap").hidden = !list.length;
+  }).catch(() => {});
+  if (session) poll();
+}
+
+function leaveLobby() {
+  inLobby = false;
+  $("lobbyView").hidden = true;
+  meta = null;
+}
+
+function renderLobby(state) {
+  $("title").textContent = state.roomName;
+  const type = state.meta.game || "crossword";
+  $("lobbyNow").hidden = !GAME_NAMES[type];
+  $("lobbyNowName").textContent = GAME_NAMES[type] || "";
+}
+
+$("lobbyContinue").onclick = () => { leaveLobby(); setStatus("Loading…"); poll(); };
+$("allRooms").onclick = () => showHome();
+document.querySelectorAll("#lobbyView [data-start]").forEach((b) => {
+  b.onclick = () => startGame(b.dataset.start === "crossword" ? { game: "crossword", puzzleId: "random" } : { game: b.dataset.start });
+});
 
 // ---------- board games ----------
 
@@ -465,7 +530,7 @@ $("clueText").onclick = () => { toggleDir(); moved(); };
 
 $("menuBtn").onclick = (e) => { e.stopPropagation(); $("menu").hidden = !$("menu").hidden; };
 document.addEventListener("click", () => { $("menu").hidden = true; });
-$("homeBtn").onclick = () => showHome();
+$("homeBtn").onclick = () => { if (session) showLobby(); };
 $("menu").onclick = async (e) => {
   const act = e.target.dataset.act;
   if (!act || !session) return;
@@ -519,29 +584,19 @@ async function makeLink(kind) {
   }
 }
 
-async function newGame() {
-  $("banner").hidden = true;
-  const list = await fetch("/puzzles/index.json").then((r) => r.json()).catch(() => []);
-  const box = $("bookList");
-  box.innerHTML = "";
-  for (const p of list) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.textContent = p.title;
-    b.onclick = () => startGame({ game: "crossword", puzzleId: p.id });
-    box.appendChild(b);
-  }
-  $("newRandom").onclick = () => startGame({ game: "crossword", puzzleId: "random" });
-  document.querySelectorAll("#newDialog [data-game]").forEach((b) => { b.onclick = () => startGame({ game: b.dataset.game }); });
-  $("newDialog").showModal();
+function newGame() {
+  showLobby();
 }
 
 async function startGame(choice) {
-  $("newDialog").close();
-  if (!meta) return;
+  if (!session) return;
   setStatus(choice.puzzleId === "random" ? "Making a new puzzle…" : "Starting…");
   try {
-    await applyState(await api("POST", { action: "new", room: session.room, fromGameId: meta.gameId, ...choice }));
+    // Replace whatever is on right now (the server ignores the request if it changed meanwhile).
+    const { meta: current } = await api("GET");
+    const res = await api("POST", { action: "new", room: session.room, fromGameId: current.gameId, ...choice });
+    leaveLobby();
+    await applyState(res);
     setStatus("");
   } catch (err) {
     if (lostAccess(err)) return;
@@ -596,12 +651,14 @@ function showScreen(id) {
   $("homeBtn").hidden = !inGame;
   if (!inGame) {
     $("players").innerHTML = "";
-    $("title").textContent = "Crossword Together";
+    $("title").textContent = "Games Together";
   }
 }
 
 function showHome(notice) {
   session = null;
+  inLobby = false;
+  lobbyState = null;
   clearTimeout(pollTimer);
   history.replaceState(null, "", "/");
   showScreen("homeScreen");
@@ -703,8 +760,8 @@ function enterRoom(room) {
   history.replaceState(null, "", `/?room=${room}`);
   showScreen("gameScreen");
   $("grid").innerHTML = "";
-  setStatus("Loading…");
-  poll();
+  lobbyState = null;
+  showLobby(); // always arrive in the room's lobby
 }
 
 buildKeyboard();

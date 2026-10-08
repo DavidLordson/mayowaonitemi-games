@@ -20,7 +20,7 @@ import { generatePuzzle } from "../../lib/generator.mjs";
 import words from "../../lib/words.mjs";
 
 type Member = { name: string; color: string; tokens: string[]; joinedAt: number };
-type GameType = "crossword" | "ludo" | "whot";
+type GameType = "lobby" | "crossword" | "ludo" | "whot";
 type Meta = { gameId: string; game?: GameType; puzzleId?: string; startedAt: number }; // no game = crossword
 type Room = { name: string; createdAt: number; members: Record<string, Member>; meta: Meta; generated?: number };
 type Invite = { kind: "member" | "device"; pid?: string; expires: number; by: string };
@@ -153,7 +153,7 @@ export default async (req: Request) => {
       name: cleanName(body.roomName) || `${name}'s room`,
       createdAt: Date.now(),
       members: { [pid]: member },
-      meta: { gameId: newGameId(), puzzleId: DEFAULT_PUZZLE, startedAt: Date.now() },
+      meta: { gameId: newGameId(), game: "lobby", startedAt: Date.now() }, // nothing picked yet
     };
     await store().setJSON(roomKey(room), data, { onlyIfNew: true });
     return json({ room, pid, token, roomName: data.name });

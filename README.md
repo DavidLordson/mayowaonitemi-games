@@ -6,7 +6,7 @@ Private game rooms for playing together on separate phones:
 - **Ludo** — two players each play two opposite houses (first to join: red + yellow; second: green + blue; all 8 tokens home to win). Two dice: use each die on any token (split or combine), a 6 brings a token out, double 6 / a capture / getting home earns another roll, stars and start squares are safe, exact roll to get home.
 - **Whot** — Nigerian rules: 1 Hold on, 2 Pick two (block it with your own 2 — the pick stacks), 5 Pick three, 8 Suspension, 14 General market, 20 Whot (call a shape).
 
-Pick a game from **⋯ → New game**. Everyone in the room plays (up to 4).
+Opening a room shows its **lobby**: continue the game in progress or pick another (⌂ returns to it). Everyone in the room plays (up to 4); anyone waiting in the lobby is pulled into a newly started game.
 
 - `public/` — the site (no build step). `public/puzzles/` holds puzzle files; add one there and list it in `index.json` to make it available for "New game".
 - `netlify/functions/room.mts` — `/api/room`: private rooms, invite links and the shared game state, stored in Netlify Blobs. Each player's device writes only its own record, so simultaneous typing never collides; phones poll about once a second.
