@@ -158,7 +158,7 @@ dialog .form { padding: 22px; min-width: 280px; text-align: center; }
 
 /* ---------- Ludo ---------- */
 .ludo { --size: min(calc(100vw - 16px), 540px); display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; align-items: flex-start; }
-.ludo-3d { display: none; width: var(--size); height: calc(var(--size) * .92); touch-action: manipulation; }
+.ludo-3d { display: none; width: var(--size); height: var(--size); touch-action: manipulation; }
 .ludo-3d canvas { display: block; }
 .ludo.is-3d .ludo-3d { display: block; }
 .ludo.is-3d .ludo-board, .ludo.is-3d .dice-pair { display: none; }
@@ -204,7 +204,7 @@ dialog .form { padding: 22px; min-width: 280px; text-align: center; }
   border: 2px solid rgba(0,0,0,.45); box-shadow: 0 2px 3px rgba(0,0,0,.35);
 }
 .ludo-token.movable { cursor: pointer; z-index: 3; }
-.ludo-token.movable::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 3px solid var(--ink); animation: pulse 0.9s ease-in-out infinite; }
+.ludo-token.selected::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; border: 3px solid var(--ink); animation: pulse 0.9s ease-in-out infinite; }
 .ludo-token.just-moved::before { box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--c); }
 @keyframes pulse { 50% { transform: scale(1.18); opacity: .5; } }
 .ludo-side { display: flex; flex-direction: column; gap: 12px; width: min(100%, 360px); }

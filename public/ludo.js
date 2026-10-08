@@ -193,7 +193,10 @@ export function mount(root, ctx) {
       ? myColors.flatMap((color) => [0, 1, 2, 3].filter((i) => optionsFor(color, i).length).map((token) => ({ color, token })))
       : [];
     if (sel && !optionsFor(sel.color, sel.token).length) sel = null;
-    if (!sel && movableTokens.length === 1) sel = movableTokens[0]; // only one choice: pick it for them
+    // Always have a piece picked: the one that just moved if it can go on, else the first that can.
+    if (!sel && movableTokens.length) {
+      sel = movableTokens.find((t) => g.last && t.color === g.last.color && t.token === g.last.token) ?? movableTokens[0];
+    }
     options = sel ? optionsFor(sel.color, sel.token) : [];
     const justRolled = g.seq !== lastSeq && dice && lastSeq !== -1 && g.phase !== "over" && !g.last;
     lastSeq = g.seq;
@@ -213,13 +216,8 @@ export function mount(root, ctx) {
         stacks.set(key, n + 1);
         const opts = optionsFor(color, i);
         const movable = opts.length > 0;
-        // Tapping a token picks it; if it has only one possible move, that move happens straight away.
-        if (movable) {
-          tokenActions.set(color + i, () => {
-            if (opts.length === 1) send(opts[0].both ? { type: "both", color, token: i } : { type: "move", color, token: i, die: opts[0].die });
-            else { sel = { color, token: i }; update(game); }
-          });
-        }
+        // Tapping a token picks it; the number buttons then move it.
+        if (movable) tokenActions.set(color + i, () => { sel = { color, token: i }; update(game); });
         const justMoved = !!g.last && g.last.color === color && g.last.token === i;
         const selected = !!sel && sel.color === color && sel.token === i;
         pieces.push({ color, token: i, cell, n: cell.span === 1 ? n : 0, home: pos === HOME, movable, selected, justMoved });
@@ -282,11 +280,10 @@ export function mount(root, ctx) {
       btn.classList.toggle("used", both ? used.some(Boolean) : !!used[d]);
       btn.style.setProperty("--c", COLOR_HEX[colorsOf(current)[0]]);
     });
-    const left = dice ? dice.filter((_, d) => !used[d]) : [];
     let status;
     if (g.phase === "over") status = `${nameOf(g.winner)} won!`;
     else if (myTurn && g.phase === "roll") status = "Your turn — tap the dice to roll";
-    else if (myTurn) status = sel ? "Tap a number to move it" : `Tap a glowing piece (${left.join(" & ")} to move)`;
+    else if (myTurn) status = "Tap a number to move the glowing piece — or tap another piece first";
     else status = `${nameOf(current.pid)}'s turn${g.phase === "move" && dice ? ` (rolled ${dice.join(" & ")})` : ""}`;
     statusEl.textContent = note || status;
     root.querySelector(".game-log").innerHTML = g.log.slice(-3).reverse().map((l) => `<li>${escapeHtml(l)}</li>`).join("");

@@ -114,6 +114,8 @@ function fitCamera(st, container, bounds, look, elevationDeg) {
   if (!w || !h) return;
   const { renderer, camera } = st;
   renderer.setSize(w, h);
+  // Looking straight down, "up" on screen is the far edge of the board.
+  camera.up.set(0, elevationDeg >= 89 ? 0 : 1, elevationDeg >= 89 ? -1 : 0);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   const el = THREE.MathUtils.degToRad(elevationDeg);
@@ -157,7 +159,7 @@ export async function createBoard3D(boardEl, trayEl, { onToken, onDie }) {
       obj.scale.setScalar(TOKEN_SCALE);
       const mats = ownMaterials(obj);
       mats.forEach((m) => { m.emissive?.copy(m.color); m.emissiveIntensity = 0; });
-      const glow = ring(0.42, 0.58, INK);
+      const glow = ring(0.4, 0.64, INK);
       const mark = ring(0.42, 0.52, "#ffffff");
       board.scene.add(glow, mark);
       extras.push(glow, mark);
@@ -183,7 +185,7 @@ export async function createBoard3D(boardEl, trayEl, { onToken, onDie }) {
   });
 
   const fit = () => {
-    fitCamera(board, boardEl, BOARD_BOUNDS, new THREE.Vector3(0, -0.2, 0), 62);
+    fitCamera(board, boardEl, BOARD_BOUNDS, new THREE.Vector3(0, -0.2, 0), 90);
     fitCamera(tray, trayEl, TRAY_BOUNDS, new THREE.Vector3(0, DIE_HALF, 0), 50);
     board.renderer.shadowMap.needsUpdate = true;
   };
@@ -295,19 +297,20 @@ export async function createBoard3D(boardEl, trayEl, { onToken, onDie }) {
           board.renderer.shadowMap.needsUpdate = true;
         }
         // The picked token floats up a little.
-        const lift = t.selected ? 0.35 : 0;
+        const lift = t.selected ? 0.25 : 0;
         if (Math.abs(lift - t.lift) > 0.001) {
           t.lift += (lift - t.lift) * 0.3;
           board.renderer.shadowMap.needsUpdate = true;
         }
         if (t.t0 < 0) pos.y = t.to.y + t.lift;
         const show = t.obj.visible;
-        t.glow.visible = show && t.movable && !t.selected;
-        t.mark.visible = show && (t.selected || (t.justMoved && !t.movable));
+        // Only the picked token glows; the white ring marks the last move.
+        t.glow.visible = show && t.selected;
+        t.mark.visible = show && t.justMoved && !t.selected;
         for (const r of [t.glow, t.mark]) r.position.set(pos.x, t.to.y + 0.015, pos.z);
         t.glow.scale.setScalar(1 + pulse * 0.18);
-        t.glow.material.opacity = 1 - pulse * 0.5;
-        t.mats.forEach((m) => { m.emissiveIntensity = t.selected ? 0.35 : t.movable ? 0.12 + pulse * 0.3 : 0; });
+        t.glow.material.opacity = 1 - pulse * 0.35;
+        t.mats.forEach((m) => { m.emissiveIntensity = t.selected ? 0.12 + pulse * 0.3 : 0; });
       }
     }
 
