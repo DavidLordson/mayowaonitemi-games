@@ -162,10 +162,10 @@ dialog .form { padding: 22px; min-width: 280px; text-align: center; }
 .ludo-3d canvas { display: block; }
 .ludo.is-3d .ludo-3d { display: block; }
 .ludo.is-3d .ludo-board, .ludo.is-3d .dice-pair { display: none; }
-.ludo-tray { display: none; height: 130px; touch-action: manipulation; }
-.ludo-tray canvas { display: block; }
-.ludo.is-3d .ludo-tray { display: block; }
-.ludo-picks { display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 10px; }
+.ludo-roll { --c: var(--ink); height: 64px; border-radius: 14px; border: 0; background: var(--c); color: #fff; font-size: 22px; font-weight: 800; cursor: pointer; }
+.ludo-roll[hidden] { display: none; }
+.ludo-roll:disabled { opacity: .5; cursor: default; }
+.ludo-picks { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 10px; }
 .ludo-picks[hidden] { display: none; }
 .ludo-pick {
   --c: var(--ink);

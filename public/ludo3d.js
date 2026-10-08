@@ -1,4 +1,4 @@
-// 3D Ludo (three.js + models/ludo_set.glb): the board in one canvas, the dice in a tray below.
+// 3D Ludo (three.js + models/ludo_set.glb). The dice are thrown onto the middle of the board.
 // It only draws what ludo.js hands it; the rules stay on the server.
 // 1 unit = 1 board square, board centre at the origin.
 
@@ -10,20 +10,23 @@ const MODEL_URL = "/models/ludo_set.glb";
 const COLORS = ["red", "green", "yellow", "blue"];
 const INK = "#1f2433";
 const GROUND = -0.7; // underside of the board frame
-const TOKEN_SCALE = 1.2; // a little chunkier than the model, easier to hit with a finger
-const DIE_HALF = 0.4;
-const DIE_GAP = 0.75; // each die's distance from the tray centre
+const TOKEN_SCALE = 1.45; // chunkier than the model, easier to see and hit with a finger
+const DIE_SCALE = 1.75;
+const DIE_HALF = 0.4 * DIE_SCALE;
+const DIE_REST_Y = 0.36 + DIE_HALF; // resting on the tip of the centre pyramid
+const DIE_SPOTS = [[-0.78, 0.15], [0.78, -0.15]]; // where the dice land, middle of the board
+// Board colours, a little darker than the model's whites so the track doesn't glare.
+const RECOLOR = { Ludo_Field: "#8e95a1", Ludo_Tile: "#e6e8ec", Ludo_Pad: "#e6e8ec" };
 // Rotation (x, y, z) that puts each value on top; an unrotated die shows 1.
 const DIE_FACE = {
   1: [0, 0, 0], 2: [-Math.PI / 2, 0, 0], 3: [0, 0, Math.PI / 2],
   4: [0, 0, -Math.PI / 2], 5: [Math.PI / 2, 0, 0], 6: [Math.PI, 0, 0],
 };
-const STACK = 0.17; // nudge for tokens sharing a square
-const ROLL_TIME = 0.6;
+const STACK = 0.2; // nudge for tokens sharing a square
+const ROLL_TIME = 0.75;
 
 const corners = (xs, ys, zs) => xs.flatMap((x) => ys.flatMap((y) => zs.map((z) => new THREE.Vector3(x, y, z))));
 const BOARD_BOUNDS = corners([-8.15, 8.15], [GROUND, 0.6], [-8.15, 8.15]);
-const TRAY_BOUNDS = corners([-DIE_GAP - 0.75, DIE_GAP + 0.75], [0, 2 * DIE_HALF + 0.5], [-0.75, 0.75]);
 
 let modelPromise = null; // loaded once, cloned for each mounted board
 const loadModel = () => (modelPromise ??= new GLTFLoader().loadAsync(MODEL_URL).catch((err) => {
@@ -138,7 +141,7 @@ function fitCamera(st, container, bounds, look, elevationDeg) {
   place(hi);
 }
 
-export async function createBoard3D(boardEl, trayEl, { onToken, onDie }) {
+export async function createBoard3D(boardEl, { onToken, onDie }) {
   const gltf = await loadModel();
   if (!boardEl.isConnected) return null; // the view was closed while loading
 
@@ -147,7 +150,10 @@ export async function createBoard3D(boardEl, trayEl, { onToken, onDie }) {
   board.renderer.shadowMap.autoUpdate = false; // shadows only change when a token moves
   const set = gltf.scene.clone(true);
   set.traverse((o) => {
-    if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+    if (!o.isMesh) return;
+    o.castShadow = true;
+    o.receiveShadow = true;
+    for (const m of [o.material].flat()) if (RECOLOR[m.name]) m.color.set(RECOLOR[m.name]);
   });
   board.scene.add(set);
   const extras = []; // rings we created, disposed on destroy
@@ -159,72 +165,59 @@ export async function createBoard3D(boardEl, trayEl, { onToken, onDie }) {
       obj.scale.setScalar(TOKEN_SCALE);
       const mats = ownMaterials(obj);
       mats.forEach((m) => { m.emissive?.copy(m.color); m.emissiveIntensity = 0; });
-      const glow = ring(0.4, 0.64, INK);
-      const mark = ring(0.42, 0.52, "#ffffff");
+      const glow = ring(0.5, 0.76, INK);
+      const mark = ring(0.52, 0.62, "#ffffff");
       board.scene.add(glow, mark);
       extras.push(glow, mark);
       return { obj, mats, glow, mark, from: new THREE.Vector3(), to: obj.position.clone(), t0: -1, dur: 0, hop: 0, lift: 0, movable: false, selected: false, justMoved: false };
     });
   }
 
-  // ---- dice tray
-  const tray = stage(trayEl, 0, 512);
-  Object.assign(tray.sun.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4 });
+  // ---- dice, resting in the middle of the board
   const dice = [0, 1].map((d) => {
     const obj = set.getObjectByName(`Die_${d}`);
-    tray.scene.add(obj); // moves it out of the board scene
     const mats = ownMaterials(obj);
-    const x = d ? DIE_GAP : -DIE_GAP;
-    obj.position.set(x, DIE_HALF, 0);
+    const rest = new THREE.Vector3(DIE_SPOTS[d][0], DIE_REST_Y, DIE_SPOTS[d][1]);
+    obj.scale.setScalar(DIE_SCALE);
+    obj.position.copy(rest);
     obj.quaternion.copy(faceQuat(6 - d * 3, d ? 0.25 : -0.2)); // something showing before the first roll
-    const sel = ring(0.6, 0.7, INK);
-    sel.position.set(x, 0.004, 0);
-    tray.scene.add(sel);
-    extras.push(sel);
-    return { obj, mats, sel, value: 0, q0: new THREE.Quaternion(), q1: obj.quaternion.clone(), axis: new THREE.Vector3(), t0: -1, ready: false, tappable: false };
+    return { obj, mats, rest, from: new THREE.Vector3(), value: 0, q0: new THREE.Quaternion(), q1: obj.quaternion.clone(), axis: new THREE.Vector3(), t0: -1, ready: false, tappable: false };
   });
 
   const fit = () => {
     fitCamera(board, boardEl, BOARD_BOUNDS, new THREE.Vector3(0, -0.2, 0), 90);
-    fitCamera(tray, trayEl, TRAY_BOUNDS, new THREE.Vector3(0, DIE_HALF, 0), 50);
     board.renderer.shadowMap.needsUpdate = true;
   };
   const resize = new ResizeObserver(fit);
   resize.observe(boardEl);
-  resize.observe(trayEl);
   fit();
 
-  // Board taps: the nearest movable token on screen, generous enough for fingers.
-  function pickToken(e) {
-    const canvas = board.renderer.domElement;
+  // Taps: the nearest tappable die or movable token on screen, generous enough for fingers.
+  const canvas = board.renderer.domElement;
+  function pick(e) {
     const rect = canvas.getBoundingClientRect();
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
-    const radius = Math.max(26, rect.width / 17);
+    const unit = rect.width / 16.5; // one board square in pixels
     let best = null;
     let bestD = Infinity;
+    const consider = (world, radius, action) => {
+      const p = world.clone().project(board.camera);
+      const d = Math.hypot((p.x + 1) / 2 * rect.width - px, (1 - p.y) / 2 * rect.height - py);
+      if (d < radius && d < bestD) { bestD = d; best = action; }
+    };
+    dice.forEach((d, i) => { if (d.tappable) consider(d.rest, Math.max(30, unit * 1.3), () => onDie(i)); });
     for (const color of COLORS) {
       tokens[color].forEach((t, i) => {
-        if (!t.movable) return;
-        const p = t.to.clone().setY(t.to.y + 0.45).project(board.camera);
-        const d = Math.hypot((p.x + 1) / 2 * rect.width - px, (1 - p.y) / 2 * rect.height - py);
-        if (d < radius && d < bestD) { bestD = d; best = () => onToken(color, i); }
+        if (t.movable) consider(t.to.clone().setY(t.to.y + 0.5), Math.max(26, unit * 0.8), () => onToken(color, i));
       });
     }
     return best;
   }
-  // Tray taps: left half is die 1, right half die 2.
-  function pickDie(e) {
-    const rect = tray.renderer.domElement.getBoundingClientRect();
-    const d = e.clientX - rect.left < rect.width / 2 ? 0 : 1;
-    return dice[d].tappable ? () => onDie(d) : null;
-  }
-  for (const [canvas, pick] of [[board.renderer.domElement, pickToken], [tray.renderer.domElement, pickDie]]) {
-    canvas.addEventListener("click", (e) => pick(e)?.());
-    canvas.addEventListener("pointermove", (e) => {
-      if (e.pointerType === "mouse") canvas.style.cursor = pick(e) ? "pointer" : "";
-    });
-  }
+  canvas.addEventListener("click", (e) => pick(e)?.());
+  canvas.addEventListener("pointermove", (e) => {
+    if (e.pointerType === "mouse") canvas.style.cursor = pick(e) ? "pointer" : "";
+  });
 
   let first = true;
   function sync(s) {
@@ -260,14 +253,14 @@ export async function createBoard3D(boardEl, trayEl, { onToken, onDie }) {
         m.transparent = s.used[i];
         m.opacity = s.used[i] ? 0.3 : 1;
       });
-      d.sel.visible = s.selected[i];
-      d.sel.material.color.set(s.turnHex);
       if (!value) return;
       if (s.rolled) {
+        // Thrown in from the near edge of the board, bouncing to a stop in the middle.
+        d.from.set(d.rest.x + (Math.random() - 0.5) * 3, d.rest.y + 3, 7.5);
         d.q0.copy(d.obj.quaternion);
         d.q1.copy(faceQuat(value, (Math.random() - 0.5) * 0.8));
         d.axis.set(Math.random() - 0.5, 0.3, Math.random() - 0.5).normalize();
-        d.t0 = performance.now() / 1000 + i * 0.06;
+        d.t0 = performance.now() / 1000 + i * 0.08;
       } else if (value !== d.value && d.t0 < 0) {
         d.q1.copy(faceQuat(value, i ? 0.25 : -0.2));
         d.obj.quaternion.copy(d.q1);
@@ -320,16 +313,16 @@ export async function createBoard3D(boardEl, trayEl, { onToken, onDie }) {
         const e = easeOut(k);
         spinQ.setFromAxisAngle(d.axis, (1 - e) * Math.PI * 4);
         d.obj.quaternion.slerpQuaternions(d.q0, d.q1, e).premultiply(spinQ);
-        d.obj.position.y = DIE_HALF + Math.abs(Math.sin(Math.PI * 2 * k)) * (1 - k) * 0.9;
-        if (k === 1) { d.t0 = -1; d.obj.quaternion.copy(d.q1); }
+        d.obj.position.lerpVectors(d.from, d.rest, e);
+        d.obj.position.y = d.rest.y + (d.from.y - d.rest.y) * (1 - e) * Math.abs(Math.cos(Math.PI * 1.5 * k));
+        if (k === 1) { d.t0 = -1; d.obj.quaternion.copy(d.q1); d.obj.position.copy(d.rest); }
+        board.renderer.shadowMap.needsUpdate = true;
       } else if (d.t0 < 0) {
-        d.obj.position.y = DIE_HALF + (d.ready ? Math.abs(Math.sin(now * 3)) * 0.12 : 0);
+        d.obj.scale.setScalar(DIE_SCALE * (d.ready ? 1 + pulse * 0.08 : 1)); // "tap me" when it's your roll
       }
-      d.sel.scale.setScalar(1 + pulse * 0.05);
     }
 
     board.renderer.render(board.scene, board.camera);
-    tray.renderer.render(tray.scene, tray.camera);
   }
   frame();
 
@@ -342,7 +335,6 @@ export async function createBoard3D(boardEl, trayEl, { onToken, onDie }) {
     for (const color of COLORS) for (const t of tokens[color]) t.mats.forEach((m) => m.dispose());
     for (const d of dice) d.mats.forEach((m) => m.dispose());
     board.dispose();
-    tray.dispose();
   }
 
   return { sync, destroy };

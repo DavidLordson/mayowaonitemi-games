@@ -62,11 +62,11 @@ export function mount(root, ctx) {
           </div>
           <div class="ludo-status"></div>
         </div>
-        <div class="ludo-tray" aria-label="Dice"></div>
+        <button class="ludo-roll primary" hidden>Roll</button>
         <div class="ludo-picks" hidden>
           <button class="ludo-pick" data-die="0"></button>
-          <button class="ludo-pick" data-die="1"></button>
           <button class="ludo-pick sum" data-die="both"></button>
+          <button class="ludo-pick" data-die="1"></button>
         </div>
         <ul class="game-log"></ul>
       </div>
@@ -125,6 +125,8 @@ export function mount(root, ctx) {
     if (game && dieTappable[i] && game.phase === "roll") send({ type: "roll" });
   }
   diceBtns.forEach((btn, i) => { btn.onclick = () => tapDie(i); });
+  const rollBtn = root.querySelector(".ludo-roll");
+  rollBtn.onclick = () => tapDie(0);
   // Number buttons move the picked token by that die, or by both ("both").
   pickBtns.forEach((btn) => {
     btn.onclick = () => {
@@ -137,7 +139,7 @@ export function mount(root, ctx) {
   });
 
   import("./ludo3d.js")
-    .then(({ createBoard3D }) => createBoard3D(root.querySelector(".ludo-3d"), root.querySelector(".ludo-tray"), {
+    .then(({ createBoard3D }) => createBoard3D(root.querySelector(".ludo-3d"), {
       onToken: (color, i) => tokenActions.get(color + i)?.(),
       onDie: tapDie,
     }))
@@ -230,7 +232,6 @@ export function mount(root, ctx) {
         canRoll,
         tappable: dieTappable,
         used: [0, 1].map((d) => g.phase === "move" && !!used[d]),
-        selected: [false, false],
         turnHex: COLOR_HEX[colorsOf(current)[0]],
       });
     } else {
@@ -271,6 +272,9 @@ export function mount(root, ctx) {
     });
     const picks = root.querySelector(".ludo-picks");
     picks.hidden = !moving;
+    rollBtn.hidden = !(myTurn && g.phase === "roll");
+    rollBtn.disabled = !canRoll;
+    rollBtn.style.setProperty("--c", COLOR_HEX[colorsOf(current)[0]]);
     pickBtns.forEach((btn) => {
       const both = btn.dataset.die === "both";
       const d = Number(btn.dataset.die);
@@ -282,7 +286,7 @@ export function mount(root, ctx) {
     });
     let status;
     if (g.phase === "over") status = `${nameOf(g.winner)} won!`;
-    else if (myTurn && g.phase === "roll") status = "Your turn — tap the dice to roll";
+    else if (myTurn && g.phase === "roll") status = "Your turn — roll the dice";
     else if (myTurn) status = "Tap a number to move the glowing piece — or tap another piece first";
     else status = `${nameOf(current.pid)}'s turn${g.phase === "move" && dice ? ` (rolled ${dice.join(" & ")})` : ""}`;
     statusEl.textContent = note || status;
