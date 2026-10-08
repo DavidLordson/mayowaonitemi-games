@@ -93,6 +93,20 @@ function lostAccess(err) {
   return true;
 }
 
+let loadingGame = null;
+
+// Book puzzles are static files; generated ones are stored with the game on the server.
+async function loadPuzzle(m) {
+  try {
+    if (m.puzzleId !== "random") return await fetch(`/puzzles/${m.puzzleId}.json`).then((r) => r.json());
+    const res = await fetch(`/api/room?room=${session.room}&puzzle=1`, { headers: { authorization: `Bearer ${session.token}` } });
+    const body = await res.json();
+    return res.ok && body.gameId === m.gameId ? body.puzzle : null;
+  } catch {
+    return null; // try again on the next poll
+  }
+}
+
 async function applyState(state) {
   if (!session || state.room !== session.room) return;
   lastServerSkew = state.now - Date.now();
@@ -102,7 +116,11 @@ async function applyState(state) {
     saveRooms();
   }
   if (!meta || state.meta.gameId !== meta.gameId) {
-    const data = await fetch(`/puzzles/${state.meta.puzzleId}.json`).then((r) => r.json());
+    if (loadingGame === state.meta.gameId) return; // another response is already loading it
+    loadingGame = state.meta.gameId;
+    let data;
+    try { data = await loadPuzzle(state.meta); } finally { loadingGame = null; }
+    if (!data || !session || state.room !== session.room) return;
     meta = state.meta;
     myEdits = {};
     outbox = {};
@@ -450,12 +468,25 @@ async function makeLink(kind) {
 }
 
 async function newGame() {
-  if (!confirm("Start a new game? This clears the board for everyone in the room.")) return;
-  const list = await fetch("/puzzles/index.json").then((r) => r.json());
-  const others = list.filter((p) => p.id !== meta.puzzleId);
-  const pool = others.length ? others : list;
-  const pick = pool[Math.floor(Math.random() * pool.length)];
-  try { await applyState(await api("POST", { action: "new", room: session.room, puzzleId: pick.id, fromGameId: meta.gameId })); }
+  $("banner").hidden = true;
+  const list = await fetch("/puzzles/index.json").then((r) => r.json()).catch(() => []);
+  const box = $("bookList");
+  box.innerHTML = "";
+  for (const p of list) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = p.title;
+    b.onclick = () => startGame(p.id);
+    box.appendChild(b);
+  }
+  $("newRandom").onclick = () => startGame("random");
+  $("newDialog").showModal();
+}
+
+async function startGame(puzzleId) {
+  $("newDialog").close();
+  setStatus(puzzleId === "random" ? "Making a new puzzle…" : "Starting…");
+  try { await applyState(await api("POST", { action: "new", room: session.room, puzzleId, fromGameId: meta.gameId })); setStatus(""); }
   catch (err) { if (!lostAccess(err)) setStatus("Couldn't start a new game"); }
 }
 $("bannerNew").onclick = newGame;

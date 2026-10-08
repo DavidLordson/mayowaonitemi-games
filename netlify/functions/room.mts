@@ -4,6 +4,7 @@
 //   rooms/<room>/info              { name, members, meta }  – who may enter, which game is on
 //   rooms/<room>/invites/<code>    { kind, pid?, expires }  – one-time invite / device-login links
 //   games/<gameId>/players/<pid>   { cells, cursor, seen }  – one player's letters
+//   games/<gameId>/puzzle          puzzle JSON              – only for generated puzzles
 //
 // Every device holds a secret token; the room stores only its SHA-256 hash. A request
 // is allowed into a room only if its token matches one of the room's members.
@@ -12,10 +13,12 @@
 import { getStore } from "@netlify/blobs";
 import type { Config } from "@netlify/functions";
 import { createHash, randomBytes } from "node:crypto";
+import { generatePuzzle } from "../../lib/generator.mjs";
+import words from "../../lib/words.mjs";
 
 type Member = { name: string; color: string; tokens: string[]; joinedAt: number };
 type Meta = { gameId: string; puzzleId: string; startedAt: number };
-type Room = { name: string; createdAt: number; members: Record<string, Member>; meta: Meta };
+type Room = { name: string; createdAt: number; members: Record<string, Member>; meta: Meta; generated?: number };
 type Invite = { kind: "member" | "device"; pid?: string; expires: number; by: string };
 type PlayerDoc = {
   cells: Record<string, [letter: string, t: number]>;
@@ -24,6 +27,7 @@ type PlayerDoc = {
 };
 
 const DEFAULT_PUZZLE = "puzzle-001";
+const RANDOM_PUZZLE = "random"; // meta.puzzleId for generated puzzles; the puzzle itself is stored per game
 const MEMBER_INVITE_MS = 7 * 24 * 3600 * 1000;
 const DEVICE_INVITE_MS = 30 * 60 * 1000;
 const MAX_TOKENS_PER_MEMBER = 10;
@@ -102,6 +106,10 @@ export default async (req: Request) => {
     if (!current) return fail(404, "room not found");
     const pid = memberFor(current.data, auth);
     if (!pid) return fail(403, "not a member of this room");
+    if (url.searchParams.has("puzzle")) {
+      const puzzle = await store().get(`games/${current.data.meta.gameId}/puzzle`, { type: "json" });
+      return puzzle ? json({ gameId: current.data.meta.gameId, puzzle }) : fail(404, "no generated puzzle for this game");
+    }
     return json(await stateFor(room, current.data, pid));
   }
 
@@ -207,10 +215,19 @@ export default async (req: Request) => {
   if (body.action === "new") {
     const puzzleId = String(body.puzzleId ?? DEFAULT_PUZZLE);
     if (!ID.test(puzzleId)) return fail(400, "invalid puzzle");
+    if (current.data.meta.gameId !== body.fromGameId) return json(await stateFor(room, current.data, pid));
+    const gameId = newGameId();
+    let generated = current.data.generated ?? 0;
+    if (puzzleId === RANDOM_PUZZLE) {
+      generated++;
+      const puzzle = generatePuzzle(words, { id: `${RANDOM_PUZZLE}-${gameId}`, title: `Puzzle #${generated}` });
+      await store().setJSON(`games/${gameId}/puzzle`, puzzle);
+    }
     // Both players may press "new game" together; only start one new game per old one.
     const updated = await updateRoom(room, (r) => {
       if (r.meta.gameId !== body.fromGameId) return null;
-      r.meta = { gameId: newGameId(), puzzleId, startedAt: Date.now() };
+      r.meta = { gameId, puzzleId, startedAt: Date.now() };
+      r.generated = generated;
       return r;
     });
     return json(await stateFor(room, updated!, pid));

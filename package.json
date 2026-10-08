@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "validate": "node scripts/validate-puzzles.mjs",
+    "validate": "node scripts/validate-puzzles.mjs && node scripts/check-generator.mjs 20",
     "dev": "netlify dev"
   },
   "dependencies": {
