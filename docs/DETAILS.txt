@@ -129,7 +129,7 @@ Crossword
 Ludo (house rules agreed with David)
 - TWO dice. Use each die once on any token (split or combine).
 - A 6 on a die brings a token out of the yard.
-- Double 6 or a capture = another roll. Getting a token home does not.
+- Only double 6 = another roll. A capture sends the victim to its yard and the capturing token straight home (no extra roll).
 - Start squares and star squares are safe. Exact roll to get home.
 - 2 players: each plays TWO opposite houses — first member (David/Onitemi)
   = red + yellow, second (Mayowa) = green + blue. Win = all 8 tokens home.

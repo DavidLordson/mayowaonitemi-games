@@ -41,6 +41,23 @@ for (let g = 0; g < games; g++) {
   if (both.error || both.tokens.red[0] !== 3 || !both.used.every(Boolean)) fail("ludo: both dice on one token failed");
   if (!ludo.play({ ...s, dice: [3, 4] }, "a", { type: "both", color: "red", token: 0 }, rand).error) fail("ludo: both dice left the yard without a 6");
 }
+// A capture sends the victim to its yard and the capturer home, with no extra roll.
+{
+  let s = ludo.newGame(["a", "b"]);
+  // red token on square 2; green token on track square 5 (green pos 44); red rolls 3 & 1
+  s = { ...s, phase: "move", dice: [3, 1], used: [false, false], tokens: { ...s.tokens, red: [2, -1, -1, -1], green: [44, -1, -1, -1] } };
+  let n = ludo.play(s, "a", { type: "move", color: "red", token: 0, die: 0 }, rand);
+  if (n.error || n.tokens.green[0] !== -1 || n.tokens.red[0] !== ludo.HOME) fail("ludo: capture didn't send both pieces off");
+  if (n.phase !== "roll" || n.turn !== 1) fail("ludo: capture gave an extra roll or kept the turn with nothing to play");
+  // with another token out, the second die is still played before the turn passes
+  s.tokens = { ...s.tokens, red: [2, 10, -1, -1] };
+  n = ludo.play(s, "a", { type: "move", color: "red", token: 0, die: 0 }, rand);
+  if (n.phase !== "move" || n.turn !== 0) fail("ludo: turn passed with a die still to play");
+  // both dice as one jump: lands on 2 + 4 = 6, capturing only there
+  s.tokens = { ...s.tokens, red: [2, -1, -1, -1], green: [44, -1, -1, -1] };
+  n = ludo.play({ ...s, dice: [3, 1] }, "a", { type: "both", color: "red", token: 0 }, rand);
+  if (n.error || n.tokens.red[0] !== 6 || n.tokens.green[0] !== 44) fail("ludo: sum move captured on the way");
+}
 // Getting a token home does not earn another roll.
 {
   let s = ludo.newGame(["a", "b"]);
