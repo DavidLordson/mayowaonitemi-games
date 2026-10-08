@@ -1,0 +1,182 @@
+PROJECT HANDOFF NOTES — "Games Together" (mayowaonitemi-games)
+Last updated: 2026-10-08
+Give this file to Claude at the start of a new chat to pick up where we left off.
+
+======================================================================
+1. WHAT THIS IS
+======================================================================
+A private website where David (also called Onitemi, the owner) and his
+girlfriend Mayowa play games together on separate phones, live.
+Games: Crossword, Ludo, Whot. Rooms are private (invite links only).
+
+User preference: keep replies short and curt.
+
+======================================================================
+2. WHERE THINGS LIVE
+======================================================================
+- GitHub repo:   DavidLordson/mayowaonitemi-games
+- Branch:        claude/optimistic-allen-tmbuoj  (the ONLY branch; there is no main)
+- Live site:     https://mayowaonitemi-games2.netlify.app
+- Netlify project "mayowaonitemi-games2", site id d81e89ce-5929-44b3-913c-f80bb19fc60e
+  * Linked to the GitHub repo, production branch = claude/optimistic-allen-tmbuoj.
+  * Every push to that branch auto-deploys (~1 minute). Build command runs
+    `npm run validate` (tests below) — a failing check blocks the deploy.
+  * Check deploy status with the Netlify MCP tools (get-project / get-deploy-for-site).
+- An unused, empty Netlify project "mayowaonitemi-games" (id 5b354cb9-...) also
+  exists from an earlier attempt. Can be deleted.
+
+Cloud-session limitations (Claude's environment):
+- Network policy blocks *.netlify.app and netlify-mcp.netlify.app, so Claude
+  cannot open the live site or deploy via the Netlify CLI/MCP upload.
+  Deploys happen by pushing to GitHub instead.
+- Local testing works with: `netlify functions:serve --offline --port 9999`
+  (netlify-cli installed globally with npm) plus a tiny Node static server
+  that serves public/ and proxies /api/* to port 9999, then Playwright
+  (preinstalled, import from /opt/node22/lib/node_modules/playwright/index.mjs)
+  driving two "phones" (iPhone 13 contexts). `netlify dev` does NOT work here
+  (edge-functions runtime download is blocked).
+- Commits end with the Co-Authored-By / Claude-Session lines; no PR has been
+  opened (user hasn't asked for one).
+
+======================================================================
+3. ARCHITECTURE
+======================================================================
+Plain HTML/CSS/JS front end (no build step) + one Netlify Function + Netlify
+Blobs storage. Phones poll the server about once a second (5s when the tab
+is hidden). No database, no websockets.
+
+Files:
+  public/index.html        All screens: home, join, room lobby, crossword,
+                           board-game container, dialogs.
+  public/style.css         All styles (crossword, lobby, Ludo board, Whot cards).
+  public/app.js            App shell: rooms/logins, polling, lobby, crossword
+                           play, menus; mounts Ludo/Whot views.
+  public/crossword.js      buildPuzzle(): numbering + words from a grid.
+  public/ludo.js           Ludo board UI (15x15 CSS grid, tokens, two dice).
+  public/whot.js           Whot table UI (cards drawn with CSS/SVG).
+  public/puzzles/*.json    Book crossword(s); index.json lists them.
+  lib/generator.mjs        Random criss-cross crossword generator.
+  lib/words.mjs            Word bank (~426 [WORD, clue] pairs) for generator.
+  lib/games/ludo.mjs       Ludo rules (pure functions, run on server).
+  lib/games/whot.mjs       Whot rules (pure functions, run on server).
+  netlify/functions/room.mts  The whole backend at /api/room.
+  scripts/validate-puzzles.mjs  Book puzzle numbering check.
+  scripts/check-generator.mjs   Generates puzzles and checks them.
+  scripts/check-games.mjs       Plays hundreds of random Ludo/Whot games.
+  netlify.toml             publish=public, functions dir, build=npm run validate.
+  README.md                Short overview.
+
+Blob store "crossword" (strong consistency), keys:
+  rooms/<room>/info              { name, members, meta, generated }
+       members: { pid: { name, color, tokens:[sha256 of device tokens], joinedAt } }
+       meta:    { gameId, game: "lobby"|"crossword"|"ludo"|"whot", puzzleId?, startedAt }
+                (old rooms may lack `game` => treated as crossword)
+  rooms/<room>/invites/<code>    { kind: "member"|"device", pid?, expires, by }
+  games/<gameId>/players/<pid>   crossword letters { cells:{"r,c":[letter,t]}, cursor, seen }
+                                 (also used as presence heartbeat for all games)
+  games/<gameId>/puzzle          generated crossword JSON
+  games/<gameId>/state           Ludo / Whot game state
+
+API (/api/room). Auth = header "Authorization: Bearer <device token>".
+  GET  ?room=X                 room state (+ game view for Ludo/Whot)
+  GET  ?room=X&puzzle=1        generated puzzle for current game
+  POST action=create           (no auth) make room -> {room, pid, token}
+  POST action=inviteInfo/join  (no auth) use an invite code
+  POST action=edit             crossword letters / cursor / heartbeat
+  POST action=new              start game {game, puzzleId?, fromGameId}
+  POST action=play             Ludo/Whot move {gameId, move}
+  POST action=invite           make link {kind: member|device}
+  POST action=profile          change name/colour
+  POST action=logout           remove this device's token
+
+Key design decisions:
+- Crossword sync: each player's device writes only its OWN blob, so two
+  people typing at once never collide; readers merge per cell, newest wins.
+- Ludo/Whot: rules run on the server (dice, shuffling, turn checks) with a
+  conditional (etag) write; Whot only sends each player their own hand.
+- Logins: each device holds a random secret token in localStorage
+  ("cw-rooms"); the room stores only its hash. No passwords/accounts.
+- Players for Ludo/Whot = all room members (max 4), seated in JOIN ORDER,
+  so seats are stable game to game (room creator first).
+
+======================================================================
+4. FEATURES (current behaviour)
+======================================================================
+Rooms & logins
+- Home page: list of your rooms on this device + "Create a private room".
+- ⋯ menu: Invite someone (one-time link, 7 days), Log in on another device
+  (one-time link, 30 min, logs in as the SAME player), Check/Reveal (crossword
+  only), Change name/colour, Games, Log out of this room.
+- Opening a room link without a login shows "This room is private".
+- Max 8 members per room.
+
+Lobby (added last)
+- Opening a room, or tapping ⌂, shows the room LOBBY: "Continue ›" for the
+  game in progress + cards for Ludo, Whot, Crossword (random) and book puzzles.
+- New rooms start in the lobby (meta.game = "lobby").
+- If you're waiting in the lobby and someone starts a game, you're pulled in.
+- "← All my rooms" goes back to the home page.
+
+Crossword
+- Book puzzle "Puzzle 1" (13x13) transcribed from David's photo and fully
+  solved from crossings. Notable answers: 12A WALE (not WELT), 27D IN (not UN),
+  29A PHASIS, 15A AMBIGUOUS, 8D DYSLOGISTIC, 16D GESTICULATE.
+- Random crosswords: criss-cross style, ~28 words, built on the server from
+  lib/words.mjs, titled "Puzzle #N" per room.
+- Live typing, letters in each player's colour, partner's cursor/word shown,
+  custom on-screen keyboard, Check puzzle, Reveal letter, "Solved!" banner.
+
+Ludo (house rules agreed with David)
+- TWO dice. Use each die once on any token (split or combine).
+- A 6 on a die brings a token out of the yard.
+- Double 6, a capture, or getting a token home = another roll.
+- Start squares and star squares are safe. Exact roll to get home.
+- 2 players: each plays TWO opposite houses — first member (David/Onitemi)
+  = red + yellow, second (Mayowa) = green + blue. Win = all 8 tokens home.
+  Own two houses never capture each other.
+- 3-4 players: one house each.
+
+Whot (Nigerian rules, David's house rules)
+- 54-card deck, 5 cards dealt.
+- 1 Hold on (play again), 2 Pick two, 5 Pick three, 8 Suspension,
+  14 General market (everyone else picks 1, you play again),
+  20 Whot (wild, call a shape).
+- Pick two CAN be blocked with your own 2; blocks stack (2 -> 4 -> 6...);
+  whoever can't/won't block taps the market to pick and loses their turn.
+- Pick three cannot be blocked (could be changed if David wants).
+- Market empty after reshuffle: lowest hand total wins.
+
+======================================================================
+5. HISTORY (commits, oldest first)
+======================================================================
+b0d5a87 Collaborative two-player crossword (book puzzle 1)
+f377530 Private rooms, invite links, device logins
+8902072 Random crossword generator
+fe11d38 Ludo and Whot games
+f906f74 Ludo two dice; Whot block Pick two with a 2
+1348d9e Ludo two opposite houses per player (2-player)
+5e2c1db Room lobby (rooms open to a games menu)
+(+ this notes file)
+
+======================================================================
+6. KNOWN LIMITS / IDEAS NOT DONE YET
+======================================================================
+- Sync is ~1s polling, not instant push.
+- Crossword word bank is limited; words repeat over many games. Could add
+  more words or themed sets (Nigerian food, Bible, movies...).
+- A Ludo/Whot game started before a rules change may not continue cleanly;
+  start a new one.
+- Ideas mentioned: more puzzles from the book (add JSON to public/puzzles and
+  list in index.json), Pick three blockable, the unused Netlify project
+  cleanup.
+
+======================================================================
+7. HOW TO WORK ON IT NEXT TIME
+======================================================================
+1. Clone/check out branch claude/optimistic-allen-tmbuoj.
+2. Make changes; run `npm run validate` (puzzle check + generator + game sims).
+3. For UI changes, test locally with functions:serve + proxy + Playwright
+   (two phone contexts) as described in section 2.
+4. Commit and push to claude/optimistic-allen-tmbuoj -> Netlify deploys.
+5. Confirm with Netlify MCP get-project: currentDeploy should be "ready" and
+   its commit_ref should match the pushed commit.
