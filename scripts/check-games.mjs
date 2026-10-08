@@ -41,6 +41,13 @@ for (let g = 0; g < games; g++) {
   if (both.error || both.tokens.red[0] !== 3 || !both.used.every(Boolean)) fail("ludo: both dice on one token failed");
   if (!ludo.play({ ...s, dice: [3, 4] }, "a", { type: "both", color: "red", token: 0 }, rand).error) fail("ludo: both dice left the yard without a 6");
 }
+// Getting a token home does not earn another roll.
+{
+  let s = ludo.newGame(["a", "b"]);
+  s = { ...s, phase: "move", dice: [2, 1], used: [false, true], tokens: { ...s.tokens, red: [54, -1, -1, -1] } };
+  const n = ludo.play(s, "a", { type: "move", color: "red", token: 0, die: 0 }, rand);
+  if (n.tokens.red[0] !== ludo.HOME || n.turn !== 1) fail("ludo: token home gave an extra roll");
+}
 const two = ludo.newGame(["a", "b"]);
 if (two.players[0].colors.join() !== "red,yellow" || two.players[1].colors.join() !== "green,blue") fail("ludo: 2-player houses wrong");
 console.log(`ludo: ${games} games finished ok (${Math.round(ludoTurns / games)} actions per game)`);

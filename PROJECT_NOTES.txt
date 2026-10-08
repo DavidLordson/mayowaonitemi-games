@@ -25,7 +25,7 @@ HOW IT WORKS
 
 HOUSE RULES
 - Ludo: two dice, each die used once on any token; 6 brings a token out; double 6 /
-  capture / token home = roll again. 2 players: first member red+yellow, second
+  capture = roll again (token home does NOT). 2 players: first member red+yellow, second
   green+blue, all 8 home to win.
 - Whot: 1 hold on, 2 pick two (blockable with a 2, stacks), 5 pick three (not
   blockable), 8 suspension, 14 general market, 20 whot (call shape).
