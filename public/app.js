@@ -130,7 +130,7 @@ async function applyState(state) {
   if (inLobby) {
     lobbySeenGame ??= state.meta.gameId;
     lobbyState = state;
-    players = state.players;
+    players = state.players ?? players;
     renderLobby(state);
     renderPlayers(Date.now() + lastServerSkew);
     return;
@@ -144,7 +144,7 @@ async function applyState(state) {
       $("banner").hidden = true;
       showBoardGame(type, state.roomName);
     }
-    players = state.players;
+    players = state.players ?? players;
     if (state.game) boardGame.update(state.game);
     renderPlayers(Date.now() + lastServerSkew);
     return;
@@ -164,7 +164,7 @@ async function applyState(state) {
     showCrossword();
     setupPuzzle(buildPuzzle(data), state.roomName);
   }
-  players = state.players;
+  players = state.players ?? players;
   render();
 }
 

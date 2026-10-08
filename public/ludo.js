@@ -1,5 +1,9 @@
 // Ludo board UI. The server runs the rules; this draws the state and sends rolls / moves.
-// The board is 3D (ludo3d.js) once it loads; the flat CSS board shows until then, or if 3D fails.
+// Your moves show at once: the same rules run here first, and the server's reply confirms
+// (or undoes) them. The board is 3D (ludo3d.js) once it loads; the flat CSS board shows
+// until then, or if 3D fails.
+
+import * as rules from "./games/ludo.mjs";
 
 const COLOR_HEX = { red: "#e5484d", green: "#16a34a", yellow: "#eab308", blue: "#3b82f6" };
 const START = { red: 0, green: 13, yellow: 26, blue: 39 };
@@ -82,7 +86,11 @@ export function mount(root, ctx) {
   let options = []; // what the picked token can do: [{ die: 0 | 1 } | { both: true }]
   const statusEl = root.querySelector(".ludo-status");
   let game = null;
-  let busy = false;
+  let rolling = false; // a roll is on its way to the server
+  let queue = Promise.resolve(); // moves go to the server one at a time, in order
+  let pending = 0; // requests still in the queue
+  let pendingSeq = 0; // seq of the newest move shown before the server confirmed it
+  let serverGame = null; // the latest state the server sent
   let lastSeq = -1;
   let note = "";
   let view3d = null;
@@ -154,13 +162,36 @@ export function mount(root, ctx) {
     .catch((err) => console.warn("3D board unavailable, using the flat board", err));
   root.querySelector(".game-over button").onclick = () => ctx.newGame();
 
-  async function send(move) {
-    if (busy) return;
-    busy = true;
+  function send(move) {
     note = "";
-    try { await ctx.play(move); }
-    catch (err) { note = err.message; }
-    finally { busy = false; if (game) update(game); }
+    if (move.type === "roll") {
+      if (rolling) return;
+      rolling = true;
+      view3d?.startRoll(); // dice tumble while the server rolls
+    } else {
+      const names = Object.fromEntries(Object.entries(ctx.members()).map(([id, m]) => [id, m.name]));
+      const next = rules.play(game, ctx.me(), move, Math.random, names);
+      if (next.error) { note = next.error; update(game); return; }
+      pendingSeq = next.seq;
+      update(next);
+    }
+    pending++;
+    queue = queue
+      .then(() => ctx.play(move))
+      .catch((err) => { note = err.message; pendingSeq = 0; }) // rejected: fall back to the server's state
+      .finally(() => {
+        if (move.type === "roll") { rolling = false; view3d?.stopRoll(); }
+        if (--pending === 0) pendingSeq = 0;
+        update(pendingSeq ? game : serverGame ?? game);
+      });
+  }
+
+  // States from the server. While our own moves are on their way, older states are skipped
+  // so the pieces don't jump back.
+  function receive(g) {
+    serverGame = g;
+    if (pendingSeq && g.seq < pendingSeq) return;
+    update(g);
   }
 
   function drawDie(btn, value, rolling) {
@@ -202,7 +233,7 @@ export function mount(root, ctx) {
     options = sel ? optionsFor(sel.color, sel.token) : [];
     const justRolled = g.seq !== lastSeq && dice && lastSeq !== -1 && g.phase !== "over" && !g.last;
     lastSeq = g.seq;
-    const canRoll = myTurn && g.phase === "roll" && !busy;
+    const canRoll = myTurn && g.phase === "roll" && !rolling;
     dieTappable = [canRoll, canRoll];
 
     // Tokens
@@ -280,7 +311,7 @@ export function mount(root, ctx) {
       const d = Number(btn.dataset.die);
       if (both) btn.innerHTML = dice ? `${dice[0] + dice[1]}<small>${dice[0]} + ${dice[1]}</small>` : "";
       else btn.textContent = dice?.[d] ?? "";
-      btn.disabled = busy || !options.some((o) => (both ? o.both : o.die === d));
+      btn.disabled = !options.some((o) => (both ? o.both : o.die === d));
       btn.classList.toggle("used", both ? used.some(Boolean) : !!used[d]);
       btn.style.setProperty("--c", COLOR_HEX[colorsOf(current)[0]]);
     });
@@ -297,7 +328,7 @@ export function mount(root, ctx) {
     over.querySelector(".banner-title").textContent = g.winner === me ? "You won! 🎉" : `${nameOf(g.winner)} won!`;
   }
 
-  return { update };
+  return { update: receive };
 }
 
 const canStep = (pos, value) => (pos === -1 ? value === 6 : pos + value <= HOME);

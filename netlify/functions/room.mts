@@ -92,28 +92,32 @@ const gameKey = (gameId: string) => `games/${gameId}/state`;
 const BOT_DELAY_MS = 600; // pause before each computer action, so people can follow it
 
 // The computer plays when anyone's request finds it's its turn: one action (roll or move)
-// per request, at most one every BOT_DELAY_MS. Ludo only.
+// per request, at most one every BOT_DELAY_MS. Ludo only. Returns the game state it ended
+// with (so the caller needn't read it again), or undefined if it doesn't know it.
 async function botStep(meta: Meta) {
-  if (meta.game !== "ludo") return;
+  if (meta.game !== "ludo") return undefined;
   const found = await store().getWithMetadata(gameKey(meta.gameId), { type: "json" });
   const state = found?.data as any;
-  if (!state || state.phase === "over" || state.players[state.turn].pid !== ludo.BOT) return;
-  if (Date.now() - (state.at ?? 0) < BOT_DELAY_MS) return;
+  if (!state || state.phase === "over" || state.players[state.turn].pid !== ludo.BOT) return state;
+  if (Date.now() - (state.at ?? 0) < BOT_DELAY_MS) return state;
   const next = ludo.play(state, ludo.BOT, ludo.botMove(state, rand), rand, { [ludo.BOT]: ludo.BOT_NAME });
-  if (next.error) return;
+  if (next.error) return state;
   next.at = Date.now();
-  await store().setJSON(gameKey(meta.gameId), next, { onlyIfMatch: found!.etag }); // someone else may have just done it
+  const { modified } = await store().setJSON(gameKey(meta.gameId), next, { onlyIfMatch: found!.etag });
+  return modified ? next : undefined; // someone else may have just moved: read it fresh
 }
 
-async function stateFor(room: string, roomData: Room, pid: string) {
+// `known` skips reads: a game state the caller already has, and `lean` leaves out the
+// per-player crossword docs (a move reply doesn't need them; the client keeps its last ones).
+async function stateFor(room: string, roomData: Room, pid: string, known: { game?: any; lean?: boolean } = {}) {
   const members = Object.fromEntries(
     Object.entries(roomData.members).map(([id, m]) => [id, { name: m.name, color: m.color }]),
   );
   const { gameId, game: type } = roomData.meta;
   const engine = type && ENGINES[type];
   const [playerDocs, game] = await Promise.all([
-    players(gameId),
-    engine ? store().get(gameKey(gameId), { type: "json" }) : null,
+    known.lean ? undefined : players(gameId),
+    !engine ? null : known.game ?? store().get(gameKey(gameId), { type: "json" }),
   ]);
   return {
     room, roomName: roomData.name, me: pid, meta: roomData.meta, members, players: playerDocs,
@@ -143,8 +147,8 @@ export default async (req: Request) => {
       const puzzle = await store().get(`games/${current.data.meta.gameId}/puzzle`, { type: "json" });
       return puzzle ? json({ gameId: current.data.meta.gameId, puzzle }) : fail(404, "no generated puzzle for this game");
     }
-    await botStep(current.data.meta);
-    return json(await stateFor(room, current.data, pid));
+    const game = await botStep(current.data.meta);
+    return json(await stateFor(room, current.data, pid, { game }));
   }
 
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
@@ -292,7 +296,7 @@ export default async (req: Request) => {
       if (next.error) return fail(422, next.error);
       next.at = Date.now();
       const { modified } = await store().setJSON(gameKey(gameId), next, { onlyIfMatch: found.etag });
-      if (modified) return json(await stateFor(room, current.data, pid));
+      if (modified) return json(await stateFor(room, current.data, pid, { game: next, lean: true }));
     }
     return fail(409, "Busy — try again.");
   }

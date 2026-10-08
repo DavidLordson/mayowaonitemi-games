@@ -14,7 +14,8 @@ HOW IT WORKS
   + Netlify Blobs. Phones poll ~1s.
 - Rooms are private: device token in localStorage, invite links (7 days), device-login
   links (30 min, same player). Opening a room shows a lobby (Continue / pick a game).
-- Game rules run on the server: lib/games/ludo.mjs, lib/games/whot.mjs.
+- Game rules run on the server: public/games/ludo.mjs (also loaded by the browser for
+  instant moves; lib/games/ludo.mjs re-exports it), lib/games/whot.mjs.
   Crossword generator: lib/generator.mjs + lib/words.mjs (~426 words).
 - Ludo is 3D: public/ludo3d.js draws public/models/ludo_set.glb (made in Blender) with
   three.js r169 vendored in public/vendor/three (import map in index.html). Falls back

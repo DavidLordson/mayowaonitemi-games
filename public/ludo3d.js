@@ -199,7 +199,7 @@ export async function createBoard3D(boardEl, { onToken, onDie }) {
     obj.scale.setScalar(DIE_SCALE);
     obj.position.copy(rest);
     obj.quaternion.copy(faceQuat(6 - d * 3, d ? 0.25 : -0.2)); // something showing before the first roll
-    return { obj, mats, rest, from: new THREE.Vector3(), value: 0, q0: new THREE.Quaternion(), q1: obj.quaternion.clone(), axis: new THREE.Vector3(), t0: -1, ready: false, tappable: false };
+    return { obj, mats, rest, from: new THREE.Vector3(), spinning: false, value: 0, q0: new THREE.Quaternion(), q1: obj.quaternion.clone(), axis: new THREE.Vector3(), t0: -1, ready: false, tappable: false };
   });
 
   const fit = () => {
@@ -273,8 +273,11 @@ export async function createBoard3D(boardEl, { onToken, onDie }) {
       });
       if (!value) return;
       if (s.rolled) {
-        // Thrown in from the near edge of the board, bouncing to a stop in the middle.
-        d.from.set(d.rest.x + (Math.random() - 0.5) * 3, d.rest.y + 3, 7.5);
+        // Already tumbling (we started it on the tap): settle from there. Otherwise it's thrown
+        // in from the near edge of the board, bouncing to a stop in the middle.
+        if (d.spinning) d.from.copy(d.obj.position);
+        else d.from.set(d.rest.x + (Math.random() - 0.5) * 3, d.rest.y + 3, 7.5);
+        d.spinning = false;
         d.q0.copy(d.obj.quaternion);
         d.q1.copy(faceQuat(value, (Math.random() - 0.5) * 0.8));
         d.axis.set(Math.random() - 0.5, 0.3, Math.random() - 0.5).normalize();
@@ -326,7 +329,13 @@ export async function createBoard3D(boardEl, { onToken, onDie }) {
     }
 
     for (const d of dice) {
-      if (d.t0 >= 0 && now >= d.t0) {
+      if (d.spinning) {
+        // Waiting for the server's numbers: tumble and hop on the spot.
+        spinQ.setFromAxisAngle(d.axis, 0.35);
+        d.obj.quaternion.premultiply(spinQ);
+        d.obj.position.set(d.rest.x, d.rest.y + 0.9 * Math.abs(Math.sin(now * 9)), d.rest.z);
+        board.renderer.shadowMap.needsUpdate = true;
+      } else if (d.t0 >= 0 && now >= d.t0) {
         const k = Math.min((now - d.t0) / ROLL_TIME, 1);
         const e = easeOut(k);
         spinQ.setFromAxisAngle(d.axis, (1 - e) * Math.PI * 4);
@@ -357,5 +366,25 @@ export async function createBoard3D(boardEl, { onToken, onDie }) {
     board.dispose();
   }
 
-  return { sync, destroy };
+  // Start tumbling the dice as soon as Roll is tapped; sync() lands them when the numbers arrive.
+  function startRoll() {
+    for (const d of dice) {
+      d.spinning = true;
+      d.t0 = -1;
+      d.obj.scale.setScalar(DIE_SCALE);
+      d.axis.set(Math.random() - 0.5, 0.4, Math.random() - 0.5).normalize();
+    }
+  }
+  // The roll failed or didn't change anything: put the dice back where they were.
+  function stopRoll() {
+    for (const d of dice) {
+      if (!d.spinning) continue;
+      d.spinning = false;
+      d.obj.position.copy(d.rest);
+      d.obj.quaternion.copy(d.q1);
+    }
+    board.renderer.shadowMap.needsUpdate = true;
+  }
+
+  return { sync, destroy, startRoll, stopRoll };
 }
