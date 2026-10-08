@@ -33,6 +33,14 @@ for (let g = 0; g < games; g++) {
     ludoTurns++;
   }
 }
+// Both dice on one token: a 6 + 3 brings a yard token out and on to square 3.
+{
+  let s = ludo.newGame(["a", "b"]);
+  s = { ...s, phase: "move", dice: [3, 6], used: [false, false] };
+  const both = ludo.play(s, "a", { type: "both", color: "red", token: 0 }, rand);
+  if (both.error || both.tokens.red[0] !== 3 || !both.used.every(Boolean)) fail("ludo: both dice on one token failed");
+  if (!ludo.play({ ...s, dice: [3, 4] }, "a", { type: "both", color: "red", token: 0 }, rand).error) fail("ludo: both dice left the yard without a 6");
+}
 const two = ludo.newGame(["a", "b"]);
 if (two.players[0].colors.join() !== "red,yellow" || two.players[1].colors.join() !== "green,blue") fail("ludo: 2-player houses wrong");
 console.log(`ludo: ${games} games finished ok (${Math.round(ludoTurns / games)} actions per game)`);

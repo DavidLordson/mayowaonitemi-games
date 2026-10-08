@@ -66,6 +66,7 @@ export function mount(root, ctx) {
         <div class="ludo-picks" hidden>
           <button class="ludo-pick" data-die="0"></button>
           <button class="ludo-pick" data-die="1"></button>
+          <button class="ludo-pick sum" data-die="both"></button>
         </div>
         <ul class="game-log"></ul>
       </div>
@@ -77,7 +78,8 @@ export function mount(root, ctx) {
   const tokenLayer = [];
   const diceBtns = [...root.querySelectorAll(".dice")];
   const pickBtns = [...root.querySelectorAll(".ludo-pick")];
-  let selDie = 0; // which die the next token tap uses
+  let sel = null; // the token picked to move: { color, token }
+  let options = []; // what the picked token can do: [{ die: 0 | 1 } | { both: true }]
   const statusEl = root.querySelector(".ludo-status");
   let game = null;
   let busy = false;
@@ -120,12 +122,19 @@ export function mount(root, ctx) {
   board.appendChild(center);
 
   function tapDie(i) {
-    if (!game || !dieTappable[i]) return;
-    if (game.phase === "roll") send({ type: "roll" });
-    else { selDie = i; update(game); }
+    if (game && dieTappable[i] && game.phase === "roll") send({ type: "roll" });
   }
   diceBtns.forEach((btn, i) => { btn.onclick = () => tapDie(i); });
-  pickBtns.forEach((btn, i) => { btn.onclick = () => tapDie(i); });
+  // Number buttons move the picked token by that die, or by both ("both").
+  pickBtns.forEach((btn) => {
+    btn.onclick = () => {
+      if (!game || !sel) return;
+      const both = btn.dataset.die === "both";
+      const die = both ? null : Number(btn.dataset.die);
+      if (!options.some((o) => (both ? o.both : o.die === die))) return;
+      send(both ? { type: "both", ...sel } : { type: "move", ...sel, die });
+    };
+  });
 
   import("./ludo3d.js")
     .then(({ createBoard3D }) => createBoard3D(root.querySelector(".ludo-3d"), root.querySelector(".ludo-tray"), {
@@ -171,17 +180,25 @@ export function mount(root, ctx) {
 
     const dice = Array.isArray(g.dice) ? g.dice : null;
     const used = g.used || [false, false];
-    const canMoveWith = (color, token, d) => movesFor(g, color, dice[d]).includes(token);
-    const usable = myTurn && g.phase === "move" && dice
-      ? [0, 1].filter((d) => !used[d] && myColors.some((c) => movesFor(g, c, dice[d]).length))
+    const moving = myTurn && g.phase === "move" && !!dice;
+    // Everything a token can do this turn: either unused die, or both dice together.
+    const optionsFor = (color, token) => {
+      if (!moving || !myColors.includes(color)) return [];
+      const pos = g.tokens[color][token];
+      const out = [0, 1].filter((d) => !used[d] && canStep(pos, dice[d])).map((die) => ({ die }));
+      if (!used[0] && !used[1] && canUseBoth(pos, dice[0], dice[1])) out.push({ both: true });
+      return out;
+    };
+    const movableTokens = moving
+      ? myColors.flatMap((color) => [0, 1, 2, 3].filter((i) => optionsFor(color, i).length).map((token) => ({ color, token })))
       : [];
-    if (!usable.includes(selDie)) selDie = usable[0] ?? 0;
-    // Tokens glow for the chosen number; pick the other number to see its moves.
-    const dieFor = (color, token) => (usable.includes(selDie) && canMoveWith(color, token, selDie) ? selDie : undefined);
+    if (sel && !optionsFor(sel.color, sel.token).length) sel = null;
+    if (!sel && movableTokens.length === 1) sel = movableTokens[0]; // only one choice: pick it for them
+    options = sel ? optionsFor(sel.color, sel.token) : [];
     const justRolled = g.seq !== lastSeq && dice && lastSeq !== -1 && g.phase !== "over" && !g.last;
     lastSeq = g.seq;
     const canRoll = myTurn && g.phase === "roll" && !busy;
-    dieTappable = [0, 1].map((d) => !busy && (canRoll || usable.includes(d)));
+    dieTappable = [canRoll, canRoll];
 
     // Tokens
     const colors = g.players.flatMap(colorsOf);
@@ -194,10 +211,18 @@ export function mount(root, ctx) {
         const key = `${cell.r},${cell.c}`;
         const n = stacks.get(key) ?? 0;
         stacks.set(key, n + 1);
-        const movable = myColors.includes(color) && dieFor(color, i) !== undefined;
-        if (movable) tokenActions.set(color + i, () => send({ type: "move", color, token: i, die: dieFor(color, i) }));
+        const opts = optionsFor(color, i);
+        const movable = opts.length > 0;
+        // Tapping a token picks it; if it has only one possible move, that move happens straight away.
+        if (movable) {
+          tokenActions.set(color + i, () => {
+            if (opts.length === 1) send(opts[0].both ? { type: "both", color, token: i } : { type: "move", color, token: i, die: opts[0].die });
+            else { sel = { color, token: i }; update(game); }
+          });
+        }
         const justMoved = !!g.last && g.last.color === color && g.last.token === i;
-        pieces.push({ color, token: i, cell, n: cell.span === 1 ? n : 0, home: pos === HOME, movable, justMoved });
+        const selected = !!sel && sel.color === color && sel.token === i;
+        pieces.push({ color, token: i, cell, n: cell.span === 1 ? n : 0, home: pos === HOME, movable, selected, justMoved });
       });
     }
     if (view3d) {
@@ -207,7 +232,7 @@ export function mount(root, ctx) {
         canRoll,
         tappable: dieTappable,
         used: [0, 1].map((d) => g.phase === "move" && !!used[d]),
-        selected: [0, 1].map((d) => usable.length > 1 && selDie === d),
+        selected: [false, false],
         turnHex: COLOR_HEX[colorsOf(current)[0]],
       });
     } else {
@@ -224,6 +249,7 @@ export function mount(root, ctx) {
           t.onclick = tokenActions.get(p.color + p.token);
         } else t.disabled = true;
         if (p.justMoved) t.classList.add("just-moved");
+        if (p.selected) t.classList.add("selected");
         board.appendChild(t);
         tokenLayer.push(t);
       }
@@ -243,23 +269,24 @@ export function mount(root, ctx) {
       btn.disabled = !dieTappable[d];
       btn.classList.toggle("ready", canRoll);
       btn.classList.toggle("used", g.phase === "move" && !!used[d]);
-      btn.classList.toggle("selected", usable.length > 1 && selDie === d);
       btn.style.setProperty("--c", COLOR_HEX[colorsOf(current)[0]]);
     });
     const picks = root.querySelector(".ludo-picks");
-    picks.hidden = !(myTurn && g.phase === "move" && dice);
-    pickBtns.forEach((btn, d) => {
-      btn.textContent = dice?.[d] ?? "";
-      btn.disabled = busy || !usable.includes(d);
-      btn.classList.toggle("selected", usable.includes(d) && selDie === d);
-      btn.classList.toggle("used", !!used[d]);
+    picks.hidden = !moving;
+    pickBtns.forEach((btn) => {
+      const both = btn.dataset.die === "both";
+      const d = Number(btn.dataset.die);
+      if (both) btn.innerHTML = dice ? `${dice[0] + dice[1]}<small>${dice[0]} + ${dice[1]}</small>` : "";
+      else btn.textContent = dice?.[d] ?? "";
+      btn.disabled = busy || !options.some((o) => (both ? o.both : o.die === d));
+      btn.classList.toggle("used", both ? used.some(Boolean) : !!used[d]);
       btn.style.setProperty("--c", COLOR_HEX[colorsOf(current)[0]]);
     });
     const left = dice ? dice.filter((_, d) => !used[d]) : [];
     let status;
     if (g.phase === "over") status = `${nameOf(g.winner)} won!`;
     else if (myTurn && g.phase === "roll") status = "Your turn — tap the dice to roll";
-    else if (myTurn) status = usable.length > 1 ? `Pick a number, then tap a glowing token` : `Move ${left.join(" & ")} — tap a glowing token`;
+    else if (myTurn) status = sel ? "Tap a number to move it" : `Tap a glowing piece (${left.join(" & ")} to move)`;
     else status = `${nameOf(current.pid)}'s turn${g.phase === "move" && dice ? ` (rolled ${dice.join(" & ")})` : ""}`;
     statusEl.textContent = note || status;
     root.querySelector(".game-log").innerHTML = g.log.slice(-3).reverse().map((l) => `<li>${escapeHtml(l)}</li>`).join("");
@@ -272,10 +299,9 @@ export function mount(root, ctx) {
   return { update };
 }
 
-function movesFor(g, color, value) {
-  if (!color || !value) return [];
-  return g.tokens[color].map((pos, i) => ((pos === -1 ? value === 6 : pos + value <= HOME) ? i : -1)).filter((i) => i >= 0);
-}
+const canStep = (pos, value) => (pos === -1 ? value === 6 : pos + value <= HOME);
+const stepTo = (pos, value) => (pos === -1 ? 0 : pos + value);
+const canUseBoth = (pos, a, b) => (canStep(pos, a) && canStep(stepTo(pos, a), b)) || (canStep(pos, b) && canStep(stepTo(pos, b), a));
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);

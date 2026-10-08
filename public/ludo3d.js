@@ -161,7 +161,7 @@ export async function createBoard3D(boardEl, trayEl, { onToken, onDie }) {
       const mark = ring(0.42, 0.52, "#ffffff");
       board.scene.add(glow, mark);
       extras.push(glow, mark);
-      return { obj, mats, glow, mark, from: new THREE.Vector3(), to: obj.position.clone(), t0: -1, dur: 0, hop: 0, movable: false, justMoved: false };
+      return { obj, mats, glow, mark, from: new THREE.Vector3(), to: obj.position.clone(), t0: -1, dur: 0, hop: 0, lift: 0, movable: false, selected: false, justMoved: false };
     });
   }
 
@@ -245,6 +245,7 @@ export async function createBoard3D(boardEl, trayEl, { onToken, onDie }) {
         }
       }
       t.movable = p.movable;
+      t.selected = p.selected;
       t.justMoved = p.justMoved;
     }
     board.renderer.shadowMap.needsUpdate = true;
@@ -293,13 +294,20 @@ export async function createBoard3D(boardEl, trayEl, { onToken, onDie }) {
           if (k === 1) t.t0 = -1;
           board.renderer.shadowMap.needsUpdate = true;
         }
+        // The picked token floats up a little.
+        const lift = t.selected ? 0.35 : 0;
+        if (Math.abs(lift - t.lift) > 0.001) {
+          t.lift += (lift - t.lift) * 0.3;
+          board.renderer.shadowMap.needsUpdate = true;
+        }
+        if (t.t0 < 0) pos.y = t.to.y + t.lift;
         const show = t.obj.visible;
-        t.glow.visible = show && t.movable;
-        t.mark.visible = show && t.justMoved && !t.movable;
+        t.glow.visible = show && t.movable && !t.selected;
+        t.mark.visible = show && (t.selected || (t.justMoved && !t.movable));
         for (const r of [t.glow, t.mark]) r.position.set(pos.x, t.to.y + 0.015, pos.z);
         t.glow.scale.setScalar(1 + pulse * 0.18);
         t.glow.material.opacity = 1 - pulse * 0.5;
-        t.mats.forEach((m) => { m.emissiveIntensity = t.movable ? 0.12 + pulse * 0.3 : 0; });
+        t.mats.forEach((m) => { m.emissiveIntensity = t.selected ? 0.35 : t.movable ? 0.12 + pulse * 0.3 : 0; });
       }
     }
 
