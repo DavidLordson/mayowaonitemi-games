@@ -1,5 +1,5 @@
-// Cloudflare version of the server: a Worker that serves public/ and routes /api/room to
-// one Durable Object per room. Same API as netlify/functions/room.mts, plus:
+// The server: a Cloudflare Worker that serves public/ and routes /api/room to one
+// Durable Object per room. (Ported from the old Netlify function; same API.) It also has:
 //   - /api/room/ws: a WebSocket that pushes the room's state to each member the moment it
 //     changes (send {"type":"auth","token":"…"} first), so phones needn't poll every second;
 //   - the computer's Ludo turns run on a timer (Durable Object alarm) instead of riding on polls.

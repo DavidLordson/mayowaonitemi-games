@@ -1,6 +1,0 @@
-[build]
-  publish = "public"
-  command = "npm run validate"
-
-[functions]
-  directory = "netlify/functions"

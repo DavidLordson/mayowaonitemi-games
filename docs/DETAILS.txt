@@ -1,3 +1,6 @@
+NOTE: the site moved from Netlify to Cloudflare Workers (see PROJECT_NOTES.txt). Netlify
+sections below are history; netlify/ and netlify.toml were removed.
+
 PROJECT HANDOFF NOTES — "Games Together" (mayowaonitemi-games)
 Last updated: 2026-10-08
 Give this file to Claude at the start of a new chat to pick up where we left off.

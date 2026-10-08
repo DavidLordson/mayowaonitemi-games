@@ -4,22 +4,23 @@ WHAT: "Games Together" — private site where David (aka Onitemi) and Mayowa pla
 Crossword, Ludo, Whot live on separate phones. User wants short, curt replies.
 
 WHERE
-- Repo DavidLordson/mayowaonitemi-games, branch claude/optimistic-allen-tmbuoj (only branch).
-- Live: https://mayowaonitemi-games2.netlify.app (Netlify site id d81e89ce-5929-44b3-913c-f80bb19fc60e).
-- Push to the branch = auto deploy (~1 min). Build runs `npm run validate` (tests).
-- Cloud sessions can't reach *.netlify.app; check deploys via Netlify MCP get-project.
+- Repo DavidLordson/mayowaonitemi-games. Default branch claude/optimistic-allen-tmbuoj =
+  production: Cloudflare (Workers & Pages Git import) deploys every push to it.
+- Live on the Worker's ….workers.dev address (project "mayowaonitemi-games").
+- Netlify is retired (site deleted by the user; Netlify code removed).
+- Cloud sessions can't reach api.cloudflare.com; the user checks deploys in the dashboard.
 
-CLOUDFLARE (moving here from Netlify)
+CLOUDFLARE
 - wrangler.jsonc + worker/index.mjs: a Worker serves public/ and /api/room; one Durable
-  Object per room holds its data. Same API as netlify/functions/room.mts, plus a live
+  Object per room holds its data. API: create/join/invite/edit/new/play/…, plus a live
   WebSocket (/api/room/ws) that pushes state on every change, and the computer's Ludo
   turns run on Durable Object alarms. Cloudflare builds from the repo's default branch
-  (Workers & Pages Git import). Rooms from Netlify don't carry over.
+  (Workers & Pages Git import).
 - Test locally: npx wrangler@4 dev (then http://localhost:8787).
 
 HOW IT WORKS
-- Static front end in public/ + one function netlify/functions/room.mts (/api/room)
-  + Netlify Blobs. Phones poll ~1s.
+- Static front end in public/ + worker/index.mjs (/api/room). Phones get pushed state
+  over a WebSocket; they poll every 15 s as a backup (every 1 s if the socket is down).
 - Rooms are private: device token in localStorage, invite links (7 days), device-login
   links (30 min, same player). Opening a room shows a lobby (Continue / pick a game).
 - Game rules run on the server: public/games/ludo.mjs (also loaded by the browser for
@@ -30,7 +31,7 @@ HOW IT WORKS
   to the flat CSS board if 3D fails.
 - Ludo vs computer: lobby card -> new game with players [you, "cpu"]. The bot
   (botMove in lib/games/ludo.mjs) plays on the server, one action per request, 600 ms
-  apart (botStep in room.mts); clients poll every 650 ms during its turn.
+  apart on Durable Object alarms (worker/index.mjs).
 
 HOUSE RULES
 - Ludo: two dice, each die used once on any token; 6 brings a token out; only double 6
@@ -41,5 +42,4 @@ HOUSE RULES
   blockable), 8 suspension, 14 general market, 20 whot (call shape).
 - Crossword: book Puzzle 1 + random puzzles.
 
-TODO / IDEAS: more words or themes, more book puzzles, maybe blockable pick three,
-delete unused Netlify project "mayowaonitemi-games".
+TODO / IDEAS: more words or themes, more book puzzles, maybe blockable pick three.

@@ -4,12 +4,6 @@
   "type": "module",
   "scripts": {
     "validate": "node scripts/validate-puzzles.mjs && node scripts/check-generator.mjs 20 && node scripts/check-games.mjs 100",
-    "dev": "netlify dev"
-  },
-  "dependencies": {
-    "@netlify/blobs": "^11.1.3"
-  },
-  "devDependencies": {
-    "@netlify/functions": "^6.0.2"
+    "dev": "npx wrangler@4 dev"
   }
 }
