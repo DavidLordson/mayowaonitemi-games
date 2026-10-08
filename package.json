@@ -1,0 +1,15 @@
+{
+  "name": "mayowaonitemi-games",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "validate": "node scripts/validate-puzzles.mjs",
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^11.1.3"
+  },
+  "devDependencies": {
+    "@netlify/functions": "^6.0.2"
+  }
+}

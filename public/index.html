@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1f2433">
+  <title>Crossword Together</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1 id="title">Crossword</h1>
+    <div id="players" class="players"></div>
+    <button id="menuBtn" class="icon-btn" aria-label="Menu">⋯</button>
+  </header>
+
+  <div id="menu" class="menu" hidden>
+    <button data-act="check">Check puzzle</button>
+    <button data-act="reveal">Reveal letter</button>
+    <button data-act="share">Copy invite link</button>
+    <button data-act="name">Change name / colour</button>
+    <button data-act="new">New game</button>
+  </div>
+
+  <main class="layout">
+    <section class="board">
+      <div id="grid" class="grid"></div>
+      <div id="status" class="status"></div>
+    </section>
+    <section class="clues">
+      <div><h2>Across</h2><ol id="across"></ol></div>
+      <div><h2>Down</h2><ol id="down"></ol></div>
+    </section>
+  </main>
+
+  <footer class="dock">
+    <div class="cluebar">
+      <button id="prevClue" class="icon-btn" aria-label="Previous clue">‹</button>
+      <div id="clueText" class="clue-text"></div>
+      <button id="nextClue" class="icon-btn" aria-label="Next clue">›</button>
+    </div>
+    <div id="keyboard" class="keyboard"></div>
+  </footer>
+
+  <div id="banner" class="banner" hidden>
+    <div class="banner-card">
+      <p class="banner-title">Solved! 🎉</p>
+      <p>You two finished the puzzle together.</p>
+      <button id="bannerNew" class="primary">New game</button>
+      <button id="bannerClose">Keep looking</button>
+    </div>
+  </div>
+
+  <dialog id="nameDialog">
+    <form method="dialog" class="name-form">
+      <p class="banner-title">Who's playing?</p>
+      <input id="nameInput" maxlength="24" placeholder="Your name" autocomplete="off" required>
+      <div id="colorPick" class="colors"></div>
+      <button class="primary" value="ok">Start</button>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
