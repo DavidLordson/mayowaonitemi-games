@@ -19,25 +19,23 @@ User preference: keep replies short and curt.
 ======================================================================
 - GitHub repo:   DavidLordson/mayowaonitemi-games
 - Branch:        claude/optimistic-allen-tmbuoj  (the ONLY branch; there is no main)
-- Live site:     https://mayowaonitemi-games2.netlify.app
-- Netlify project "mayowaonitemi-games2", site id d81e89ce-5929-44b3-913c-f80bb19fc60e
-  * Linked to the GitHub repo, production branch = claude/optimistic-allen-tmbuoj.
-  * Every push to that branch auto-deploys (~1 minute). Build command runs
-    `npm run validate` (tests below) — a failing check blocks the deploy.
-  * Check deploy status with the Netlify MCP tools (get-project / get-deploy-for-site).
-- An unused, empty Netlify project "mayowaonitemi-games" (id 5b354cb9-...) also
-  exists from an earlier attempt. Can be deleted.
+- Live site:     the Worker's ….workers.dev address (Cloudflare dashboard →
+  Compute (Workers) → mayowaonitemi-games → the link at the top of the overview).
+  The subdomain belongs to the account, so it isn't recorded here.
+- Cloudflare Worker "mayowaonitemi-games" (wrangler.jsonc), free plan.
+  * Imported from the GitHub repo; production branch = claude/optimistic-allen-tmbuoj.
+  * Every push to that branch deploys (~1 minute). Optional build command:
+    `npm run validate` (tests below) — a failing check would block the deploy.
+  * Netlify is gone: the old project and its *.netlify.app address are dead.
 
 Cloud-session limitations (Claude's environment):
-- Network policy blocks *.netlify.app and netlify-mcp.netlify.app, so Claude
-  cannot open the live site or deploy via the Netlify CLI/MCP upload.
-  Deploys happen by pushing to GitHub instead.
-- Local testing works with: `netlify functions:serve --offline --port 9999`
-  (netlify-cli installed globally with npm) plus a tiny Node static server
-  that serves public/ and proxies /api/* to port 9999, then Playwright
-  (preinstalled, import from /opt/node22/lib/node_modules/playwright/index.mjs)
-  driving two "phones" (iPhone 13 contexts). `netlify dev` does NOT work here
-  (edge-functions runtime download is blocked).
+- Network policy blocks api.cloudflare.com and the live site, so Claude cannot
+  deploy or open it. Deploys happen by pushing to GitHub; David checks the
+  dashboard.
+- Local testing: `npx wrangler@4 dev` (localhost:8787), then Playwright
+  (preinstalled; import the default export of
+  /opt/node-tools/node_modules/playwright/index.js and launch Chromium with
+  executablePath "/opt/pw-browsers/chromium") driving one or two "phones".
 - Commits end with the Co-Authored-By / Claude-Session lines; no PR has been
   opened (user hasn't asked for one).
 
