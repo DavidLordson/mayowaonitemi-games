@@ -100,7 +100,12 @@ Key design decisions:
 - Logins: each device holds a random secret token in localStorage
   ("cw-rooms"); the room stores only its hash. No passwords/accounts.
 - Players for Ludo/Whot = all room members (max 4), seated in JOIN ORDER,
-  so seats are stable game to game (room creator first).
+  then SHIFTED ALONG ONE each new game (info.round counts them), so nobody
+  keeps the same colours and whoever starts alternates. Vs the computer the
+  seats are [you, cpu], so the computer takes red+yellow every other game.
+- When a board game ends, a full-screen "<name> won" / "Computer won" screen
+  covers everything (public/game-over.js). "Play again" restarts the SAME game
+  at once (rotated seats); "Other games" goes back to the lobby.
 
 ======================================================================
 4. FEATURES (current behaviour)

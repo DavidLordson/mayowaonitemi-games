@@ -36,7 +36,12 @@ HOW IT WORKS
   with ffmpeg: roll, land, steps (cut to move length), capture, groan, home, turn, win,
   voice-chop, voice-oya. "Get rekt" has no recording → phone's voice. Missing files fall
   back to code-made sounds. 🔊/🔇 by the Ludo status. Add/swap: drop <name>.mp3, list in FILES.
-- Ludo vs computer: lobby card; bot (botMove) runs on Durable Object alarms, 600 ms apart.
+- Vs computer: lobby cards for Ludo and Whot; each engine exports BOT/BOT_NAME/botMove/
+  isOver/turnPid and the bot runs on Durable Object alarms, 600 ms apart.
+- Game over: full-screen "<name> won" / "Computer won" (public/game-over.js, shared by
+  Ludo and Whot). "Play again" restarts the same game straight away; "Other games" = lobby.
+- Seats shift along one each new board game (info.round), so colours and who starts
+  alternate — you and Mayowa (or the computer) swap red+yellow / green+blue every game.
 - Dark mode: follows device; ◐ in top bar cycles device/dark/light.
 - Tests: npm run validate (puzzles, generator, Ludo/Whot rules, bot).
 

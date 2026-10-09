@@ -1,5 +1,7 @@
 // Whot table UI. The server deals, shuffles and checks every move; this shows your hand and sends plays.
 
+import { gameOver, gameOverHtml } from "./game-over.js";
+
 const SHAPE_SVG = {
   circle: '<circle cx="50" cy="50" r="32"/>',
   triangle: '<polygon points="50,14 88,82 12,82"/>',
@@ -49,9 +51,7 @@ export function mount(root, ctx) {
           <button value="">Cancel</button>
         </form>
       </dialog>
-      <div class="game-over" hidden>
-        <div class="banner-card"><p class="banner-title"></p><button class="primary">Play again</button></div>
-      </div>
+      ${gameOverHtml}
     </div>`;
   const hand = root.querySelector(".whot-hand");
   const statusEl = root.querySelector(".whot-status");
@@ -62,7 +62,7 @@ export function mount(root, ctx) {
   let note = "";
   let lastTopId = null;
 
-  root.querySelector(".game-over button").onclick = () => ctx.newGame();
+  const drawGameOver = gameOver(root, ctx);
   marketBtn.onclick = () => send({ type: "market" });
 
   async function send(move) {
@@ -91,7 +91,7 @@ export function mount(root, ctx) {
     game = g;
     const me = ctx.me();
     const members = ctx.members();
-    const nameOf = (pid) => (pid === me ? "You" : members[pid]?.name || "Player");
+    const nameOf = (pid) => (pid === me ? "You" : pid === "cpu" ? "Computer" : members[pid]?.name || "Player");
     const mine = g.players.find((p) => p.pid === me);
     const current = g.players[g.turn];
     const myTurn = !g.over && current.pid === me;
@@ -137,9 +137,14 @@ export function mount(root, ctx) {
     statusEl.textContent = note || status + top;
     root.querySelector(".game-log").innerHTML = g.log.slice(-3).reverse().map((l) => `<li>${escapeHtml(l)}</li>`).join("");
 
-    const over = root.querySelector(".game-over");
-    over.hidden = !g.over;
-    over.querySelector(".banner-title").textContent = g.winner === me ? "You won! 🎉" : `${nameOf(g.winner)} won!`;
+    // The market can run out before anyone finishes: then the lowest hand total wins.
+    const emptied = g.over && g.players.some((p) => p.pid === g.winner && p.count > 0);
+    drawGameOver(g.over ? {
+      youWon: g.winner === me,
+      name: nameOf(g.winner),
+      vsComputer: g.players.some((p) => p.pid === "cpu"),
+      note: emptied ? "Market ran dry — lowest hand wins." : "",
+    } : null);
   }
 
   return { update };

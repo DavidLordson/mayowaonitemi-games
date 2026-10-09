@@ -4,6 +4,7 @@
 // until then, or if 3D fails.
 
 import * as rules from "./games/ludo.mjs";
+import { gameOver, gameOverHtml } from "./game-over.js";
 import { playCapture } from "./ludo-fx.js";
 import * as sound from "./sound.js";
 
@@ -77,9 +78,7 @@ export function mount(root, ctx) {
         </div>
         <ul class="game-log"></ul>
       </div>
-      <div class="game-over" hidden>
-        <div class="banner-card"><p class="banner-title"></p><button class="primary">Play again</button></div>
-      </div>
+      ${gameOverHtml}
     </div>`;
   const board = root.querySelector(".ludo-board");
   const tokenLayer = [];
@@ -178,7 +177,7 @@ export function mount(root, ctx) {
   muteBtn.onclick = () => { sound.setMuted(!sound.isMuted()); drawMute(); };
   drawMute();
 
-  root.querySelector(".game-over button").onclick = () => ctx.newGame();
+  const drawGameOver = gameOver(root, ctx);
 
   function send(move) {
     note = "";
@@ -362,9 +361,11 @@ export function mount(root, ctx) {
     statusEl.textContent = note || status;
     root.querySelector(".game-log").innerHTML = g.log.slice(-3).reverse().map((l) => `<li>${escapeHtml(l)}</li>`).join("");
 
-    const over = root.querySelector(".game-over");
-    over.hidden = g.phase !== "over";
-    over.querySelector(".banner-title").textContent = g.winner === me ? "You won! 🎉" : `${nameOf(g.winner)} won!`;
+    drawGameOver(isOver ? {
+      youWon: g.winner === me,
+      name: nameOf(g.winner),
+      vsComputer: g.players.some((p) => p.pid === rules.BOT),
+    } : null);
   }
 
   return { update: receive };

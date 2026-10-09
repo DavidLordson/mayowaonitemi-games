@@ -173,6 +173,9 @@ export function play(prev, pid, move, rand, names = {}) {
 // Ludo has no hidden information.
 export const view = (state) => state;
 
+export const isOver = (state) => state.phase === "over";
+export const turnPid = (state) => state.players[state.turn].pid;
+
 // ---------- computer player ----------
 
 export const BOT = "cpu"; // the computer's player id; never a room member

@@ -208,9 +208,19 @@ dialog .form { padding: 22px; min-width: 280px; text-align: center; }
 .board-view { padding: 8px 8px 24px; }
 .game-log { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; color: var(--muted); text-align: center; }
 .game-log li:first-child { color: var(--ink); }
-.game-over { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 25; }
+/* Whoever won fills the whole screen, so it's clear from across the room. */
+.game-over { position: fixed; inset: 0; z-index: 40; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 24px; }
 .game-over[hidden] { display: none; }
-.game-over button { padding: 10px 14px; border-radius: 8px; cursor: pointer; font-size: 16px; }
+.go-card { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; max-width: 420px; text-align: center; animation: go-in .35s ease-out both; }
+.go-emoji { font-size: 76px; line-height: 1; animation: go-pop .5s cubic-bezier(.2,1.5,.4,1) both; }
+.go-title { margin: 0; font-size: clamp(34px, 12vw, 58px); font-weight: 800; line-height: 1.05; overflow-wrap: anywhere; }
+.go-sub { margin: 0 0 10px; color: var(--muted); font-size: 15px; }
+.go-card button { width: 100%; max-width: 300px; padding: 14px; border-radius: 10px; border: 1px solid var(--border); background: none; color: inherit; font-size: 17px; cursor: pointer; }
+.go-card button.primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); font-weight: 600; }
+.go-card button:disabled { opacity: .6; cursor: default; }
+@keyframes go-in { from { opacity: 0; transform: translateY(14px); } }
+@keyframes go-pop { from { transform: scale(.3) rotate(-14deg); } }
+@media (prefers-reduced-motion: reduce) { .go-card, .go-emoji { animation: none; } }
 
 /* ---------- Ludo ---------- */
 .ludo { --size: min(calc(100vw - 16px), 540px); display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; align-items: flex-start; }

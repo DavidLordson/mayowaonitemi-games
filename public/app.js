@@ -119,7 +119,7 @@ async function applyState(state) {
   lastServerSkew = state.now - Date.now();
   members = state.members;
   const g = state.game;
-  botTurn = !!g && g.phase !== "over" && g.players?.[g.turn]?.pid === "cpu";
+  botTurn = !!g && !(g.over || g.phase === "over") && g.players?.[g.turn]?.pid === "cpu";
   if (rooms[session.room] && rooms[session.room].roomName !== state.roomName) {
     rooms[session.room].roomName = state.roomName;
     saveRooms();
@@ -238,6 +238,8 @@ function showBoardGame(type, roomName) {
     me: () => session?.pid,
     members: () => members,
     newGame,
+    // "Play again": same game, straight away. The server rotates the seats, so the colours swap.
+    playAgain: (opts = {}) => startGame({ game: type, ...(opts.vsComputer ? { vsComputer: true } : {}) }),
     play: async (move) => {
       try {
         await applyState(await api("POST", { action: "play", room: session.room, gameId: meta.gameId, move }));

@@ -21,7 +21,11 @@ import { generatePuzzle } from "../lib/generator.mjs";
 import words from "../lib/words.mjs";
 
 const ENGINES = { ludo, whot };
+const BOT = ludo.BOT; // the computer's player id, the same in every game
+const BOT_NAME = ludo.BOT_NAME;
 const rand = () => randomInt(0, 2 ** 32) / 2 ** 32;
+// Seats shift along by one each game, so the colours (and who starts) swap over.
+const rotate = (seats, n) => seats.map((_, i) => seats[(i + n) % seats.length]);
 const DEFAULT_PUZZLE = "puzzle-001";
 const RANDOM_PUZZLE = "random";
 const MEMBER_INVITE_MS = 7 * 24 * 3600 * 1000;
@@ -133,12 +137,15 @@ export class RoomObject extends DurableObject {
     }
   }
 
-  // ---------- the computer (Ludo) ----------
+  // ---------- the computer (Ludo and Whot) ----------
 
+  // The game and engine waiting on the computer's move, or null if it isn't its turn.
   async botTurn(info) {
-    if (info?.meta.game !== "ludo") return null;
+    const engine = info && ENGINES[info.meta.game];
+    if (!engine?.botMove) return null;
     const state = await this.storage.get(`state:${info.meta.gameId}`);
-    return state && state.phase !== "over" && state.players[state.turn].pid === ludo.BOT ? state : null;
+    if (!state || engine.isOver(state) || engine.turnPid(state) !== BOT) return null;
+    return { engine, state };
   }
 
   async scheduleBot(info) {
@@ -149,9 +156,10 @@ export class RoomObject extends DurableObject {
 
   async alarm() {
     const info = await this.info();
-    const state = await this.botTurn(info);
-    if (!state) return;
-    const next = ludo.play(state, ludo.BOT, ludo.botMove(state, rand), rand, { [ludo.BOT]: ludo.BOT_NAME });
+    const turn = await this.botTurn(info);
+    if (!turn) return;
+    const { engine, state } = turn;
+    const next = engine.play(state, BOT, engine.botMove(state, rand), rand, { [BOT]: BOT_NAME });
     if (next.error) return;
     next.at = Date.now();
     await this.storage.put(`state:${info.meta.gameId}`, next);
@@ -294,13 +302,19 @@ export class RoomObject extends DurableObject {
       // Both players may press "new game" together; only start one new game per old one.
       if (info.meta.gameId !== body.fromGameId) return json(await this.stateFor(info, pid));
       const gameId = newGameId();
-      if (game === "ludo" && body.vsComputer) {
-        await this.storage.put(`state:${gameId}`, { ...ludo.newGame([pid, ludo.BOT]), at: Date.now() });
-      } else if (ENGINES[game]) {
-        // Everyone in the room plays (up to 4), in the order they joined.
-        const seated = Object.entries(info.members).sort(([, a], [, b]) => a.joinedAt - b.joinedAt).map(([id]) => id);
-        if (seated.length < 2) return fail(400, "Invite someone to the room first — this game needs at least 2 players.");
-        await this.storage.put(`state:${gameId}`, ENGINES[game].newGame(seated, rand));
+      if (ENGINES[game]) {
+        let seated;
+        if (body.vsComputer) {
+          seated = [pid, BOT];
+        } else {
+          // Everyone in the room plays (up to 4), in the order they joined.
+          seated = Object.entries(info.members).sort(([, a], [, b]) => a.joinedAt - b.joinedAt).map(([id]) => id);
+          if (seated.length < 2) return fail(400, "Invite someone to the room first — this game needs at least 2 players.");
+        }
+        // Each game in this room shifts the seats along one, so nobody keeps the same colours.
+        const round = info.round ?? 0;
+        info.round = round + 1;
+        await this.storage.put(`state:${gameId}`, { ...ENGINES[game].newGame(rotate(seated, round), rand), at: Date.now() });
       } else if (puzzleId === RANDOM_PUZZLE) {
         info.generated = (info.generated ?? 0) + 1;
         await this.storage.put(`puzzle:${gameId}`, generatePuzzle(words, { id: `${RANDOM_PUZZLE}-${gameId}`, title: `Puzzle #${info.generated}` }));
@@ -321,7 +335,7 @@ export class RoomObject extends DurableObject {
       const engine = type && ENGINES[type];
       if (!engine || body.gameId !== gameId) return fail(409, "That game has ended.");
       const names = Object.fromEntries(Object.entries(info.members).map(([id, m]) => [id, m.name]));
-      names[ludo.BOT] = ludo.BOT_NAME;
+      names[BOT] = BOT_NAME;
       const state = await this.storage.get(`state:${gameId}`);
       if (!state) return fail(404, "game not found");
       const next = engine.play(state, pid, body.move ?? {}, rand, names);

@@ -134,3 +134,28 @@ for (let g = 0; g < games; g++) {
   if (!s.players.some((p) => p.pid === s.winner && p.hand.length === 0)) stuck++;
 }
 console.log(`whot: ${games} games finished ok (${Math.round(whotTurns / games)} moves per game, ${stuck} ended on empty market)`);
+
+// The Whot computer only makes legal moves, finishes games, and beats a random player most of the time.
+{
+  let botWins = 0;
+  for (let g = 0; g < games; g++) {
+    let s = whot.newGame([whot.BOT, "h"], rand);
+    for (let step = 0; !s.over; step++) {
+      if (step > 5000) fail("whot bot game never ended");
+      const me = s.players[s.turn];
+      let move;
+      if (me.pid === whot.BOT) move = whot.botMove(s, rand);
+      else {
+        const playable = me.hand.filter((c) => whot.canPlay(s, c));
+        const card = playable.length ? pick(playable) : null;
+        move = card ? { type: "play", card: card.id, request: pick(whot.SHAPES) } : { type: "market" };
+      }
+      const next = whot.play(s, me.pid, move, rand);
+      if (next.error) fail(`whot bot error: ${next.error} (${JSON.stringify(move)})`);
+      s = next;
+    }
+    if (s.winner === whot.BOT) botWins++;
+  }
+  if (botWins < games * 0.5) fail(`whot: computer won only ${botWins}/${games} against random moves`);
+  console.log(`whot: computer beat random moves in ${botWins}/${games} games`);
+}
