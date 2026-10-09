@@ -15,6 +15,10 @@ function audio() {
   if (ctx) return ctx;
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return null;
+  // iPhones silence Web Audio when the side switch is on silent, unless the page asks for
+  // the "playback" session (Safari 16.4+). Without this one phone hears nothing while the
+  // other plays fine. Ignored by browsers that don't have it.
+  try { navigator.audioSession.type = "playback"; } catch {}
   ctx = new AC();
   master = ctx.createGain();
   master.gain.value = 0.6;
@@ -44,7 +48,14 @@ export function setMuted(m) {
   if (m) window.speechSynthesis?.cancel();
 }
 
-const ready = () => !isMuted() && ctx && ctx.state === "running";
+// Nothing plays until the context is running. If it went to sleep (the phone locked, or a
+// call came in) ask it to wake up, so the next sound is heard even if this one is missed.
+function ready() {
+  if (isMuted() || !ctx) return false;
+  if (ctx.state === "running") return true;
+  ctx.resume?.().catch(() => {});
+  return false;
+}
 
 // Plays a recording; `maxDur` cuts it short with a quick fade (e.g. steps for a short move).
 function playFile(name, delay = 0, maxDur = Infinity) {
