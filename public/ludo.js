@@ -5,6 +5,7 @@
 
 import * as rules from "./games/ludo.mjs";
 import { playCapture } from "./ludo-fx.js";
+import * as sound from "./sound.js";
 
 const COLOR_HEX = { red: "#e5484d", green: "#16a34a", yellow: "#eab308", blue: "#3b82f6" };
 const START = { red: 0, green: 13, yellow: 26, blue: 39 };
@@ -66,6 +67,7 @@ export function mount(root, ctx) {
             <button class="dice" data-die="1" aria-label="Die 2"></button>
           </div>
           <div class="ludo-status"></div>
+          <button class="icon-btn ludo-mute"></button>
         </div>
         <button class="ludo-roll primary" hidden>Roll</button>
         <div class="ludo-picks" hidden>
@@ -94,6 +96,8 @@ export function mount(root, ctx) {
   let serverGame = null; // the latest state the server sent
   let lastSeq = -1;
   let fxSeq = -1; // seq of the last capture we played the effect for
+  let wasMyTurn = false;
+  let wasOver = false;
   let note = "";
   let view3d = null;
   const tokenActions = new Map(); // "red2" -> send that token's move
@@ -166,6 +170,14 @@ export function mount(root, ctx) {
       console.warn("3D board unavailable, using the flat board", err);
       root.querySelector(".ludo").classList.remove("is-3d", "loading");
     });
+  const muteBtn = root.querySelector(".ludo-mute");
+  const drawMute = () => {
+    muteBtn.textContent = sound.isMuted() ? "🔇" : "🔊";
+    muteBtn.setAttribute("aria-label", sound.isMuted() ? "Sound off" : "Sound on");
+  };
+  muteBtn.onclick = () => { sound.setMuted(!sound.isMuted()); drawMute(); };
+  drawMute();
+
   root.querySelector(".game-over button").onclick = () => ctx.newGame();
 
   function send(move) {
@@ -174,6 +186,7 @@ export function mount(root, ctx) {
       if (rolling) return;
       rolling = true;
       view3d?.startRoll(); // dice tumble while the server rolls
+      sound.play("roll");
     } else {
       const names = Object.fromEntries(Object.entries(ctx.members()).map(([id, m]) => [id, m.name]));
       const next = rules.play(game, ctx.me(), move, Math.random, names);
@@ -233,6 +246,7 @@ export function mount(root, ctx) {
     options = sel ? optionsFor(sel.color, sel.token) : [];
     const justRolled = g.seq !== lastSeq && dice && lastSeq !== -1 && g.phase !== "over" && !g.last;
     // A capture we haven't shown yet (not on first load: that's an old one).
+    const fresh = lastSeq !== -1 && g.seq !== lastSeq; // not on first load
     const capture = lastSeq !== -1 && g.seq !== fxSeq && g.last?.captured?.length ? g.last.captured : null;
     if (capture) fxSeq = g.seq;
     lastSeq = g.seq;
@@ -296,6 +310,19 @@ export function mount(root, ctx) {
         victim: capture.some((c) => myColors.includes(c.color)),
       });
     }
+
+    // Sounds
+    if (fresh && justRolled) sound.play("land");
+    if (fresh && g.last && !capture) {
+      const steps = g.last.from === -1 ? 1 : g.last.to - g.last.from;
+      sound.play("steps", { steps });
+      if (g.last.to === HOME) sound.play("home", {}, Math.min(steps, 12) * 0.06);
+    }
+    const isOver = g.phase === "over";
+    if (fresh && isOver && !wasOver) sound.play("win", {}, 0.5);
+    else if (lastSeq !== -1 && myTurn && g.phase === "roll" && !wasMyTurn) sound.play("turn", {}, 0.3);
+    wasMyTurn = myTurn;
+    wasOver = isOver;
 
     // Players
     root.querySelector(".ludo-players").innerHTML = g.players.map((p, i) => {

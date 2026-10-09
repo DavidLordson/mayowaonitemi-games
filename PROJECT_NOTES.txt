@@ -31,6 +31,11 @@ HOW IT WORKS
   board shake, confetti in victim's colour, victim token flies/tumbles back to yard (3D),
   victim's phone vibrates (Android). Reduced-motion: text only. Lottie/Rive could replace
   the text later (512×512, transparent, 1–2 s, <150 KB, text as shapes).
+- Sounds (public/sound.js): made in code (Web Audio) since Kenney.nl is blocked from
+  sessions: dice rattle/land, step ticks, capture thud + spoken line (phone's own voice),
+  victim groan, home chime, your-turn ping, win fanfare. 🔊/🔇 by the Ludo status. To use
+  real MP3s (mono, <50 KB): put public/sounds/<name>.mp3 (roll, land, steps, capture,
+  groan, home, turn, win, voice-chop, voice-rekt, voice-oya) and list the name in FILES.
 - Ludo vs computer: lobby card; bot (botMove) runs on Durable Object alarms, 600 ms apart.
 - Dark mode: follows device; ◐ in top bar cycles device/dark/light.
 - Tests: npm run validate (puzzles, generator, Ludo/Whot rules, bot).
@@ -45,8 +50,5 @@ HOUSE RULES
 - Crossword: book Puzzle 1 + random puzzles.
 
 NEXT (agreed, not started)
-- Sounds: dice rattle/land, step ticks, capture thud + voice line, chopped groan,
-  home chime, your-turn ping, win fanfare. Placeholders from Kenney.nl (CC0); David may
-  record voice lines. MP3 mono <50 KB. Mute toggle, unlock on first tap.
 - Ideas: more words/themes, more book puzzles, maybe blockable pick three.
 - Optional for David: Cloudflare build command `npm run validate`.

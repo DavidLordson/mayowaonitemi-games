@@ -1,8 +1,15 @@
 // Capture effect for Ludo: big text, board shake and confetti in the victim's colour.
 // Code-only for now; a Lottie / Rive animation can replace the text later.
 
-const ATTACK_LINES = ["CHOP AM JOORRR!", "Get rekt", "Oya go house!"];
-const VICTIM_LINES = ["Dem don chop you! 😭", "Ouch! Back to yard", "Na wa o!"];
+import * as sound from "./sound.js";
+
+// id names the recording that can replace the spoken line: public/sounds/voice-<id>.mp3
+const ATTACK_LINES = [
+  { id: "chop", text: "CHOP AM JOORRR!", speak: "Chop am jorrr!" },
+  { id: "rekt", text: "Get rekt" },
+  { id: "oya", text: "Oya go house!" },
+];
+const VICTIM_LINES = [{ text: "Dem don chop you! 😭" }, { text: "Ouch! Back to yard" }, { text: "Na wa o!" }];
 const pickLine = (lines) => lines[Math.floor(Math.random() * lines.length)];
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -13,11 +20,16 @@ export function playCapture(boardEl, { hex, victim }) {
   text.className = `capture-text${victim ? " victim" : ""}`;
   text.style.setProperty("--c", hex);
   text.style.setProperty("--tilt", `${(Math.random() * 10 - 5).toFixed(1)}deg`);
-  text.textContent = pickLine(victim ? VICTIM_LINES : ATTACK_LINES);
+  const line = pickLine(victim ? VICTIM_LINES : ATTACK_LINES);
+  text.textContent = line.text;
   document.body.appendChild(text);
   setTimeout(() => text.remove(), 1800);
 
-  if (victim) navigator.vibrate?.([120, 60, 200]);
+  sound.play("capture");
+  if (victim) {
+    sound.play("groan", {}, 0.25);
+    navigator.vibrate?.([120, 60, 200]);
+  } else sound.say(line.id, line.speak ?? line.text, 0.2);
   if (reducedMotion()) return;
 
   boardEl.classList.remove("shake");
