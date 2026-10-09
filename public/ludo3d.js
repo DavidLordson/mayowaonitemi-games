@@ -33,6 +33,7 @@ const DIE_FACE = {
 };
 const STACK = 0.2; // nudge for tokens sharing a square
 const ROLL_TIME = 0.75;
+const SPIN_AXIS = new THREE.Vector3(1, 0, 0.4).normalize();
 
 const corners = (xs, ys, zs) => xs.flatMap((x) => ys.flatMap((y) => zs.map((z) => new THREE.Vector3(x, y, z))));
 const BOARD_BOUNDS = corners([-8.15, 8.15], [GROUND, 0.6], [-8.15, 8.15]);
@@ -192,7 +193,7 @@ export async function createBoard3D(boardEl, { onToken, onDie }) {
       const mark = ring(0.52, 0.62, "#ffffff");
       board.scene.add(glow, mark);
       extras.push(glow, mark);
-      return { obj, mats, glow, mark, from: new THREE.Vector3(), to: obj.position.clone(), t0: -1, dur: 0, hop: 0, lift: 0, movable: false, selected: false, justMoved: false };
+      return { obj, mats, glow, mark, rest: obj.quaternion.clone(), spin: 0, from: new THREE.Vector3(), to: obj.position.clone(), t0: -1, dur: 0, hop: 0, lift: 0, movable: false, selected: false, justMoved: false };
     });
   }
 
@@ -256,7 +257,14 @@ export async function createBoard3D(boardEl, { onToken, onDie }) {
         t.to.copy(to);
         const dist = t.from.distanceTo(to);
         if (first) t.obj.position.copy(to);
-        else {
+        else if (p.flung) {
+          // Captured: thrown high (towards the camera), tumbling, back to its yard.
+          t.t0 = performance.now() / 1000 + 0.15; // let the capturing token land first
+          t.dur = 0.9;
+          t.hop = 5;
+          t.spin = 2;
+        } else {
+          if (t.spin) { t.spin = 0; t.obj.quaternion.copy(t.rest); }
           t.t0 = performance.now() / 1000;
           t.dur = Math.min(0.18 + dist * 0.02, 0.4);
           t.hop = Math.min(0.3 + dist * 0.04, 0.8);
@@ -309,10 +317,11 @@ export async function createBoard3D(boardEl, { onToken, onDie }) {
       for (const t of tokens[color]) {
         const pos = t.obj.position;
         if (t.t0 >= 0) {
-          const k = Math.min((now - t.t0) / t.dur, 1);
+          const k = Math.min(Math.max((now - t.t0) / t.dur, 0), 1);
           pos.lerpVectors(t.from, t.to, easeInOut(k));
           pos.y += Math.sin(Math.PI * k) * t.hop;
-          if (k === 1) t.t0 = -1;
+          if (t.spin) t.obj.quaternion.copy(t.rest).premultiply(spinQ.setFromAxisAngle(SPIN_AXIS, easeInOut(k) * Math.PI * 2 * t.spin));
+          if (k === 1) { t.t0 = -1; t.spin = 0; t.obj.quaternion.copy(t.rest); }
           board.renderer.shadowMap.needsUpdate = true;
         }
         // The picked token floats up a little.

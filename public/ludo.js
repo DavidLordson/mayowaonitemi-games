@@ -4,6 +4,7 @@
 // until then, or if 3D fails.
 
 import * as rules from "./games/ludo.mjs";
+import { playCapture } from "./ludo-fx.js";
 
 const COLOR_HEX = { red: "#e5484d", green: "#16a34a", yellow: "#eab308", blue: "#3b82f6" };
 const START = { red: 0, green: 13, yellow: 26, blue: 39 };
@@ -92,6 +93,7 @@ export function mount(root, ctx) {
   let pendingSeq = 0; // seq of the newest move shown before the server confirmed it
   let serverGame = null; // the latest state the server sent
   let lastSeq = -1;
+  let fxSeq = -1; // seq of the last capture we played the effect for
   let note = "";
   let view3d = null;
   const tokenActions = new Map(); // "red2" -> send that token's move
@@ -230,6 +232,9 @@ export function mount(root, ctx) {
     if (sel && !optionsFor(sel.color, sel.token).length) sel = null;
     options = sel ? optionsFor(sel.color, sel.token) : [];
     const justRolled = g.seq !== lastSeq && dice && lastSeq !== -1 && g.phase !== "over" && !g.last;
+    // A capture we haven't shown yet (not on first load: that's an old one).
+    const capture = lastSeq !== -1 && g.seq !== fxSeq && g.last?.captured?.length ? g.last.captured : null;
+    if (capture) fxSeq = g.seq;
     lastSeq = g.seq;
     const canRoll = myTurn && g.phase === "roll" && !rolling;
     dieTappable = [canRoll, canRoll];
@@ -251,7 +256,8 @@ export function mount(root, ctx) {
         if (movable) tokenActions.set(color + i, () => { sel = { color, token: i }; update(game); });
         const justMoved = !!g.last && g.last.color === color && g.last.token === i;
         const selected = !!sel && sel.color === color && sel.token === i;
-        pieces.push({ color, token: i, cell, n: cell.span === 1 ? n : 0, home: pos === HOME, movable, selected, justMoved });
+        const flung = !!capture && capture.some((c) => c.color === color && c.token === i);
+        pieces.push({ color, token: i, cell, n: cell.span === 1 ? n : 0, home: pos === HOME, movable, selected, justMoved, flung });
       });
     }
     if (view3d) {
@@ -278,9 +284,17 @@ export function mount(root, ctx) {
         } else t.disabled = true;
         if (p.justMoved) t.classList.add("just-moved");
         if (p.selected) t.classList.add("selected");
+        if (p.flung) t.classList.add("flung");
         board.appendChild(t);
         tokenLayer.push(t);
       }
+    }
+
+    if (capture) {
+      playCapture(root.querySelector(view3d ? ".ludo-3d" : ".ludo-board"), {
+        hex: COLOR_HEX[capture[0].color],
+        victim: capture.some((c) => myColors.includes(c.color)),
+      });
     }
 
     // Players
