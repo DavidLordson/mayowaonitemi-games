@@ -1,9 +1,10 @@
-// Game sounds. Placeholders are made in code (Web Audio), so nothing to download. To use a
-// real recording instead, drop an MP3 (mono, <50 KB) into public/sounds/ named after the
-// sound ("roll.mp3", "capture.mp3", …) or the voice line ("voice-chop.mp3", …) and add the
-// name to FILES below.
+// Game sounds. Recordings in public/sounds/ (listed in FILES) play when present; anything
+// without one falls back to a sound made in code (Web Audio), and voice lines without a
+// recording ("rekt") use the phone's own voice. To add or swap one: mono MP3, <50 KB, named
+// after the sound ("roll.mp3") or voice line ("voice-rekt.mp3"), listed in FILES.
 
-const FILES = []; // e.g. ["roll", "voice-chop"]: those play /sounds/<name>.mp3
+// David's recordings (Pixabay + their own voice lines), trimmed and levelled to mono MP3s.
+const FILES = ["roll", "land", "steps", "capture", "groan", "home", "turn", "win", "voice-chop", "voice-oya"];
 const MUTE_KEY = "games-muted";
 
 let ctx = null;
@@ -45,13 +46,24 @@ export function setMuted(m) {
 
 const ready = () => !isMuted() && ctx && ctx.state === "running";
 
-function playFile(name, delay = 0) {
+// Plays a recording; `maxDur` cuts it short with a quick fade (e.g. steps for a short move).
+function playFile(name, delay = 0, maxDur = Infinity) {
   const buf = buffers.get(name);
   if (!buf) return false;
   const src = ctx.createBufferSource();
   src.buffer = buf;
-  src.connect(master);
-  src.start(ctx.currentTime + delay);
+  const t = ctx.currentTime + delay;
+  if (maxDur < buf.duration) {
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(1, t + maxDur - 0.06);
+    g.gain.linearRampToValueAtTime(0, t + maxDur);
+    src.connect(g).connect(master);
+    src.start(t);
+    src.stop(t + maxDur);
+  } else {
+    src.connect(master);
+    src.start(t);
+  }
   return true;
 }
 
@@ -140,7 +152,9 @@ const SOUNDS = {
 
 export function play(name, opts = {}, delay = 0) {
   if (!ready()) return;
-  if (playFile(name, delay)) return;
+  // Steps last about as long as the token's hop: longer moves play more of the recording.
+  const maxDur = name === "steps" ? 0.25 + Math.min(opts.steps ?? 1, 12) * 0.08 : Infinity;
+  if (playFile(name, delay, maxDur)) return;
   SOUNDS[name]?.(ctx.currentTime + delay, opts);
 }
 
