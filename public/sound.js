@@ -20,6 +20,13 @@ function audio() {
   // other plays fine. Ignored by browsers that don't have it.
   try { navigator.audioSession.type = "playback"; } catch {}
   ctx = new AC();
+  // Chrome suspends the context when a call grabs the speaker; this catches the moment it
+  // happens and asks for it back, instead of waiting for the next tap.
+  // Only while the game is on screen: during the call itself the tab is in the background,
+  // and asking for the speaker back every few hundred ms would just fight the call.
+  ctx.addEventListener?.("statechange", () => {
+    if (ctx.state !== "running" && !document.hidden) setTimeout(wake, 300);
+  });
   master = ctx.createGain();
   master.gain.value = 0.6;
   master.connect(ctx.destination);
@@ -33,12 +40,24 @@ function audio() {
   return ctx;
 }
 
+// Wakes an audio context that already exists. A phone call, another app taking over the
+// speaker, or the screen locking suspends it ("interrupted" on iOS), and it does NOT come
+// back by itself — without this the game stays silent for the rest of the game.
+function wake() {
+  if (ctx && ctx.state !== "running") ctx.resume?.().catch(() => {});
+}
+
 // Phones only allow sound after a tap: set it up and wake it on the first one.
 const unlock = () => {
-  const c = audio();
-  if (c?.state === "suspended") c.resume();
+  audio();
+  wake();
 };
 for (const ev of ["pointerdown", "keydown", "touchend"]) window.addEventListener(ev, unlock, { capture: true, passive: true });
+// Coming back to the game (call over, app switched back, screen on) should bring sound back
+// without needing a tap first.
+document.addEventListener("visibilitychange", () => { if (!document.hidden) wake(); });
+window.addEventListener("focus", wake);
+window.addEventListener("pageshow", wake);
 
 export const isMuted = () => {
   try { return localStorage.getItem(MUTE_KEY) === "1"; } catch { return false; }
