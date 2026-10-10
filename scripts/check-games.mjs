@@ -6,6 +6,9 @@ const games = Number(process.argv[2] ?? 200);
 const rand = Math.random;
 const pick = (a) => a[Math.floor(rand() * a.length)];
 const fail = (msg) => { console.error(msg); process.exit(1); };
+// The dice give a dry player a growing chance of a 6; by the 8th dry roll it's certain,
+// so nobody can go more than this many rolls in a row without one.
+const DRY_LIMIT = 7;
 
 let ludoTurns = 0;
 for (let g = 0; g < games; g++) {
@@ -67,6 +70,35 @@ for (let g = 0; g < games; g++) {
 }
 const two = ludo.newGame(["a", "b"]);
 if (two.players[0].colors.join() !== "red,yellow" || two.players[1].colors.join() !== "green,blue") fail("ludo: 2-player houses wrong");
+
+// House rule: no safe squares. A star (track square 8) protects by default and doesn't here.
+{
+  // green sits on track square 8 (green pos 47); red moves 2 -> 8 and lands on it.
+  const setup = (s) => ({ ...s, phase: "move", dice: [6, 1], used: [false, false],
+    tokens: { ...s.tokens, red: [2, -1, -1, -1], green: [47, -1, -1, -1] } });
+  const safe = ludo.play(setup(ludo.newGame(["a", "b"])), "a", { type: "move", color: "red", token: 0, die: 0 }, rand);
+  if (safe.error || safe.tokens.green[0] !== 47) fail("ludo: a star square didn't protect");
+  const open = ludo.play(setup(ludo.newGame(["a", "b"], rand, { noSafe: true })), "a", { type: "move", color: "red", token: 0, die: 0 }, rand);
+  if (open.error || open.tokens.green[0] !== -1 || open.tokens.red[0] !== ludo.HOME) fail("ludo: noSafe didn't allow a capture on a star");
+  console.log("ludo: safe squares protect, and the no-safe-squares rule turns that off");
+}
+
+// Nobody should wait long for a 6: after a few dry rolls the chance grows to a certainty.
+{
+  let s = ludo.newGame(["a", "b"]);
+  let worst = 0, dry = 0, sixes = 0;
+  for (let i = 0; i < 20000; i++) {
+    // Roll for "a" every time, ignoring whose turn it is: this tests the dice, not the turns.
+    const next = ludo.play({ ...s, turn: 0, phase: "roll" }, "a", { type: "roll" }, rand);
+    if (next.error) fail(`ludo dice error: ${next.error}`);
+    s = next;
+    if (s.dice.includes(6)) { sixes++; dry = 0; } else { dry++; worst = Math.max(worst, dry); }
+  }
+  if (worst > DRY_LIMIT) fail(`ludo: went ${worst} rolls without a 6 (limit ${DRY_LIMIT})`);
+  const share = sixes / 20000;
+  if (share < 0.3 || share > 0.65) fail(`ludo: ${Math.round(share * 100)}% of rolls had a 6 — out of the expected range`);
+  console.log(`ludo: a 6 in ${Math.round(share * 100)}% of rolls, never more than ${worst} rolls without one`);
+}
 console.log(`ludo: ${games} games finished ok (${Math.round(ludoTurns / games)} actions per game)`);
 
 // The computer only makes legal moves, finishes games, and beats a random player most of the time.

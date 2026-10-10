@@ -47,6 +47,12 @@ HOW IT WORKS
 
 HOUSE RULES
 - Ludo: two dice, each die used once; 6 brings a token out; ONLY double 6 = roll again.
+  Dice are fair until a player goes 2 rolls without a 6, then the first die gets a growing
+  chance of one (certain by the 8th dry roll): ~38% of rolls hold a 6 instead of 31%, and
+  nobody sits there waiting while the other keeps rolling them. Counter: state.dry[pid].
+  Optional house rule "no safe squares" (lobby checkbox, remembered per device): stars and
+  start squares stop protecting, so a token can be chopped anywhere. The 3D board's stars
+  are painted into the model, so a banner above the board says the rule is on.
   Capture: victim → yard, capturing token → straight home, no bonus roll.
   Sum = both dice as one jump (only landing square counts). Token home = no bonus.
   2 players: first member red+yellow, second green+blue, all 8 home to win.

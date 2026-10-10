@@ -42,7 +42,7 @@ export function gameOver(root, ctx) {
       again.textContent = "Play again";
       el.hidden = false;
     }
-    opts = { vsComputer: !!result.vsComputer };
+    opts = { vsComputer: !!result.vsComputer, noSafe: !!result.noSafe };
     emoji.textContent = result.youWon ? "🎉" : result.vsComputer ? "🤖" : "🏆";
     title.textContent = result.youWon ? "You won!" : `${result.name} won`;
     sub.textContent = result.note || (result.youWon ? "Well played." : "Play again — the colours swap over.");

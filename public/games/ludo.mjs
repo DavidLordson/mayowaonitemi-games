@@ -20,7 +20,7 @@ const SEATS = { 2: [["red", "yellow"], ["green", "blue"]], 3: [["red"], ["green"
 
 export const trackIndex = (color, pos) => (START[color] + pos) % 52;
 
-export function newGame(pids) {
+export function newGame(pids, rand, opts = {}) {
   const seats = SEATS[Math.min(Math.max(pids.length, 2), 4)];
   const players = pids.slice(0, 4).map((pid, i) => ({ pid, colors: seats[i] }));
   return {
@@ -34,9 +34,29 @@ export function newGame(pids) {
     bonus: false, // another roll is due after this one
     winner: null,
     last: null, // { color, token, from, to, captured: [{color, token}] }
+    noSafe: !!opts.noSafe, // "no safe squares": a token can be captured anywhere on the track
+    dry: {}, // pid -> rolls since that player last saw a 6 (see rollDice)
     log: [],
     seq: 0,
   };
+}
+
+// Safe squares (the start squares and the stars) can be switched off per game.
+const isSafe = (state, square) => !state.noSafe && SAFE.has(square);
+
+// Waiting eight turns for a 6 while the other player keeps getting them is the single most
+// annoying thing about Ludo, so a player who hasn't seen a 6 for a few rolls gets a growing
+// chance of one on the first die. By the seventh dry roll it's certain. Fair dice otherwise.
+const DRY_BOOST = [0, 0, 0.15, 0.3, 0.5, 0.7, 0.85, 1];
+const boostFor = (dry) => DRY_BOOST[Math.min(dry, DRY_BOOST.length - 1)];
+
+function rollDice(state, pid, rand) {
+  const dry = state.dry?.[pid] ?? 0;
+  const boost = boostFor(dry);
+  const first = boost > 0 && rand() < boost ? 6 : 1 + Math.floor(rand() * 6);
+  const dice = [first, 1 + Math.floor(rand() * 6)];
+  state.dry = { ...state.dry, [pid]: dice.includes(6) ? 0 : dry + 1 };
+  return dice;
 }
 
 const canMove = (pos, value) => (pos === -1 ? value === 6 : pos + value <= HOME);
@@ -91,7 +111,7 @@ export function play(prev, pid, move, rand, names = {}) {
 
   if (move.type === "roll") {
     if (state.phase !== "roll") return { error: "Use your dice first." };
-    const dice = [1 + Math.floor(rand() * 6), 1 + Math.floor(rand() * 6)];
+    const dice = rollDice(state, pid, rand);
     state.dice = dice;
     state.used = [false, false];
     state.bonus = dice[0] === 6 && dice[1] === 6;
@@ -133,7 +153,7 @@ export function play(prev, pid, move, rand, names = {}) {
     const captured = [];
     if (to <= LAST_TRACK) {
       const square = trackIndex(color, to);
-      if (!SAFE.has(square)) {
+      if (!isSafe(state, square)) {
         for (const other of state.players) {
           if (other === player) continue; // your own two houses never capture each other
           for (const oc of colorsOf(other)) {
@@ -221,12 +241,12 @@ function scoreMove(state, player, color, from, value) {
   if (to === HOME) score += 100;
   if (from === -1) score += 50;
   if (from <= LAST_TRACK && to > LAST_TRACK && to < HOME) score += 30; // into the safe home column
-  if (from >= 0 && from <= LAST_TRACK && !SAFE.has(trackIndex(color, from))) {
+  if (from >= 0 && from <= LAST_TRACK && !isSafe(state, trackIndex(color, from))) {
     score += 20 * threats(state, player, trackIndex(color, from)); // escaping danger
   }
   if (to <= LAST_TRACK) {
     const square = trackIndex(color, to);
-    if (SAFE.has(square)) score += 15;
+    if (isSafe(state, square)) score += 15;
     else {
       for (const other of state.players) {
         if (other === player) continue;

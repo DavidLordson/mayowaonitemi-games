@@ -61,6 +61,7 @@ export function mount(root, ctx) {
       <div class="ludo-3d"></div>
       <div class="ludo-board"></div>
       <div class="ludo-side">
+        <p class="ludo-rule" hidden>No safe squares — you can be chopped anywhere</p>
         <div class="ludo-players"></div>
         <div class="ludo-controls">
           <div class="dice-pair">
@@ -323,6 +324,11 @@ export function mount(root, ctx) {
     wasMyTurn = myTurn;
     wasOver = isOver;
 
+    // No safe squares: grey out the stars so the board doesn't promise protection it isn't
+    // giving. (The 3D board's stars are painted into the model, so the banner has to say it.)
+    root.querySelector(".ludo").classList.toggle("no-safe", !!g.noSafe);
+    root.querySelector(".ludo-rule").hidden = !g.noSafe;
+
     // Players
     root.querySelector(".ludo-players").innerHTML = g.players.map((p, i) => {
       const cols = colorsOf(p);
@@ -365,6 +371,7 @@ export function mount(root, ctx) {
       youWon: g.winner === me,
       name: nameOf(g.winner),
       vsComputer: g.players.some((p) => p.pid === rules.BOT),
+      noSafe: !!g.noSafe,
     } : null);
   }
 

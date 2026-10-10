@@ -219,10 +219,15 @@ function renderLobby(state) {
 
 $("lobbyContinue").onclick = () => { leaveLobby(); setStatus("Loading…"); poll(); };
 $("allRooms").onclick = () => showHome();
+// "No safe squares" is a Ludo house rule; remembered on this device between games.
+$("optNoSafe").checked = !!storage.get("cw-no-safe");
+$("optNoSafe").onchange = () => storage.set("cw-no-safe", $("optNoSafe").checked);
+const noSafe = () => ($("optNoSafe").checked ? { noSafe: true } : {});
+
 document.querySelectorAll("#lobbyView [data-start]").forEach((b) => {
   b.onclick = () => startGame(b.dataset.start === "crossword"
     ? { game: "crossword", puzzleId: "random" }
-    : { game: b.dataset.start, ...("cpu" in b.dataset ? { vsComputer: true } : {}) });
+    : { game: b.dataset.start, ...("cpu" in b.dataset ? { vsComputer: true } : {}), ...noSafe() });
 });
 
 // ---------- board games ----------
@@ -239,7 +244,11 @@ function showBoardGame(type, roomName) {
     members: () => members,
     newGame,
     // "Play again": same game, straight away. The server rotates the seats, so the colours swap.
-    playAgain: (opts = {}) => startGame({ game: type, ...(opts.vsComputer ? { vsComputer: true } : {}) }),
+    playAgain: (opts = {}) => startGame({
+      game: type,
+      ...(opts.vsComputer ? { vsComputer: true } : {}),
+      ...(opts.noSafe ? { noSafe: true } : {}), // keep the house rule the game was played under
+    }),
     play: async (move) => {
       try {
         await applyState(await api("POST", { action: "play", room: session.room, gameId: meta.gameId, move }));

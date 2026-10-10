@@ -314,7 +314,8 @@ export class RoomObject extends DurableObject {
         // Each game in this room shifts the seats along one, so nobody keeps the same colours.
         const round = info.round ?? 0;
         info.round = round + 1;
-        await this.storage.put(`state:${gameId}`, { ...ENGINES[game].newGame(rotate(seated, round), rand), at: Date.now() });
+        const opts = { noSafe: !!body.noSafe }; // Ludo only; Whot ignores it
+        await this.storage.put(`state:${gameId}`, { ...ENGINES[game].newGame(rotate(seated, round), rand, opts), at: Date.now() });
       } else if (puzzleId === RANDOM_PUZZLE) {
         info.generated = (info.generated ?? 0) + 1;
         await this.storage.put(`puzzle:${gameId}`, generatePuzzle(words, { id: `${RANDOM_PUZZLE}-${gameId}`, title: `Puzzle #${info.generated}` }));
